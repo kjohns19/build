@@ -1,0 +1,10 @@
+# Vim swap files
+*.swp
+*.swo
+
+# Object files
+*.o
+
+# Libraries
+*.a
+*.so
