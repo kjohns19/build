@@ -2,10 +2,30 @@
 
 import argparse
 import json
+import os.path
+import time
+import sys
+from collections import OrderedDict
+
+#TODO put in config file
+DEFAULT_INFO = OrderedDict([
+    ('projectname', 'example'),
+    ('builddir', 'build.dir'),
+    ('language', 'cpp'),
+    ('cppflags', '-std=c++14 -g -Wall -Werror'),
+    ('targets', [
+        OrderedDict([
+            ('name', 'example'),
+            ('type', 'executable'),
+            ('srcdirs', [ 'src' ])
+        ])
+    ])
+])
 
 def main():
     args = parse_args()
-    read_info(args.file)
+    info = read_info(args.file)
+    print('Need init: ' + str(info['need_init']))
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -19,10 +39,46 @@ def parse_args():
 
     return args
 
+def validate_info(info):
+    required_global_keys = set([
+        'projectname', 'builddir', 'targets'])
+    optional_global_keys = set([
+        'language', 'libraries', 'cflags', 'cppflags'])
+    keys = set(info.keys())
+
+    missing = list(required_global_keys - keys)
+    invalid = list(keys - (required_global_keys | optional_global_keys))
+    if missing or invalid:
+        print('ERROR - invalid build info file:')
+        if missing:
+            print('    Missing required values: ' + ', '.join(missing))
+        if invalid:
+            print('    Invalid values: ' + ', '.join(invalid))
+        sys.exit(1)
+
 def read_info(filename):
-    with open(filename, 'r') as f:
-        info = json.load(f)
-    print(info)
+    info = {}
+    new_file = True
+    if os.path.isfile(filename):
+        with open(filename, 'r') as f:
+            info['data'] = json.load(f)
+        validate_info(info['data'])
+        new_file = False
+    else:
+        info['data'] = DEFAULT_INFO
+        with open(filename, 'w') as f:
+            json.dump(info['data'], f, indent=4)
+
+    build_dir = info['data']['builddir']
+    build_ts_file = os.path.join(build_dir, 'timestamp')
+    if not new_file and os.path.isfile(build_ts_file):
+        info_ts = time.ctime(os.path.getmtime(filename))
+        build_ts = time.ctime(os.path.getmtime(build_ts_file))
+        info['need_init'] = (info_ts > build_ts)
+    else:
+        info['need_init'] = True
+
+    return info
 
 
 if __name__ == '__main__':
