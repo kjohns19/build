@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+
+def main():
+    args = parse_args()
+    read_info(args.file)
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-f', '--file', action='store',
+        help='Use FILE as the build file')
+    args = parser.parse_args()
+
+    if args.file is None:
+        args.file = 'build.info'
+
+    return args
+
+def read_info(filename):
+    with open(filename, 'r') as f:
+        info = json.load(f)
+    print(info)
+
+
+if __name__ == '__main__':
+    main()
