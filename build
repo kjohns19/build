@@ -100,30 +100,30 @@ def validate_info(info):
 
 
 def read_info(filename):
-    info = {}
+    data = {}
     new_file = False
     if os.path.isfile(filename):
         with open(filename, 'r') as f:
-            info['data'] = json.load(f)
-        validate_info(info['data'])
+            data['info'] = json.load(f)
+        validate_info(data['info'])
     else:
-        info['data'] = DEFAULT_INFO
+        data['info'] = DEFAULT_INFO
         with open(filename, 'w') as f:
-            json.dump(info['data'], f, indent=4)
+            json.dump(data['info'], f, indent=4)
         new_file = True
 
-    build_dir = info['data']['builddir']
+    build_dir = data['info']['builddir']
     cmake_file = os.path.join(build_dir, 'CMakeLists.txt')
     if not new_file and os.path.isfile(cmake_file):
         info_ts = time.ctime(os.path.getmtime(filename))
         cmake_ts = time.ctime(os.path.getmtime(cmake_file))
-        info['need_init'] = (info_ts > cmake_ts)
+        data['need_init'] = (info_ts > cmake_ts)
     else:
-        info['need_init'] = True
+        data['need_init'] = True
 
-    return info
+    return data
 
-def generate_cmake(info):
+def generate_cmake(data):
     pass
 
 
