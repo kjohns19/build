@@ -22,10 +22,20 @@ DEFAULT_INFO = OrderedDict([
     ])
 ])
 
+LIBRARYFILE = os.path.join(os.path.abspath(os.path.dirname(__file__)), ".build_libs")
+with open(LIBRARYFILE) as config_file:
+    LIBRARIES = json.load(config_file)
+    keys = ['find_package', 'pkg_check', 'include_dirs', 'link_dirs', 'link_libs']
+    for lib, data in LIBRARIES.items():
+        data['name'] = lib
+        for key in keys:
+            data.setdefault(key, [])
+
 def main():
     args = parse_args()
     info = read_info(args.file)
-    print('Need init: ' + str(info['need_init']))
+    if info['need_init']:
+        generate_cmake(info)
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -39,46 +49,82 @@ def parse_args():
 
     return args
 
-def validate_info(info):
-    required_global_keys = set([
-        'projectname', 'builddir', 'targets'])
-    optional_global_keys = set([
-        'language', 'libraries', 'cflags', 'cppflags'])
-    keys = set(info.keys())
+VALIDATE_ERROR_MSG = 'ERROR - invalid build info file:'
 
-    missing = list(required_global_keys - keys)
-    invalid = list(keys - (required_global_keys | optional_global_keys))
+def validate_keys(keys, required, optional):
+    missing = list(required - keys)
+    invalid = list(keys - (required | optional))
     if missing or invalid:
-        print('ERROR - invalid build info file:')
+        print(VALIDATE_ERROR_MSG)
         if missing:
             print('    Missing required values: ' + ', '.join(missing))
         if invalid:
             print('    Invalid values: ' + ', '.join(invalid))
         sys.exit(1)
 
+def validate_type(type):
+    types = set(['executable', 'staticlib', 'sharedlib'])
+    if type not in types:
+        print(VALIDATE_ERROR_MSG)
+        print('    Invalid target type: ' + type)
+        sys.exit(1)
+
+def validate_libraries(libraries):
+    invalid = libraries - set(LIBRARIES.keys())
+    if invalid:
+        print(VALIDATE_ERROR_MSG)
+        print('    Invalid library: ' + ', '.join(invalid))
+        sys.exit(1)
+
+def validate_info(info):
+    required = set(['projectname', 'builddir', 'targets'])
+    optional = set(['libraries', 'cflags', 'cppflags'])
+    validate_keys(set(info.keys()), required, optional)
+    global_libraries = set(info.get('libraries') or [])
+    global_cflags = info.get('cflags') or ''
+    global_cppflags = info.get('cppflags') or ''
+
+    validate_libraries(global_libraries)
+
+    required = set(['name', 'srcs'])
+    optional = optional | set(['type'])
+    for target in info['targets']:
+        target.setdefault('type', 'executable')
+        validate_type(target['type'])
+        keys = set(target.keys())
+        validate_keys(set(target.keys()), required, optional)
+        target['libraries'] = global_libraries | set(target.get('libaries') or [])
+        target['cflags'] = (global_cflags + (target.get('cflags') or '')).strip()
+        target['cppflags'] = (global_cppflags + (target.get('cppflags') or '')).strip()
+        validate_libraries(target['libraries'])
+
+
 def read_info(filename):
     info = {}
-    new_file = True
+    new_file = False
     if os.path.isfile(filename):
         with open(filename, 'r') as f:
             info['data'] = json.load(f)
         validate_info(info['data'])
-        new_file = False
     else:
         info['data'] = DEFAULT_INFO
         with open(filename, 'w') as f:
             json.dump(info['data'], f, indent=4)
+        new_file = True
 
     build_dir = info['data']['builddir']
-    build_ts_file = os.path.join(build_dir, 'timestamp')
-    if not new_file and os.path.isfile(build_ts_file):
+    cmake_file = os.path.join(build_dir, 'CMakeLists.txt')
+    if not new_file and os.path.isfile(cmake_file):
         info_ts = time.ctime(os.path.getmtime(filename))
-        build_ts = time.ctime(os.path.getmtime(build_ts_file))
-        info['need_init'] = (info_ts > build_ts)
+        cmake_ts = time.ctime(os.path.getmtime(cmake_file))
+        info['need_init'] = (info_ts > cmake_ts)
     else:
         info['need_init'] = True
 
     return info
+
+def generate_cmake(info):
+    pass
 
 
 if __name__ == '__main__':
