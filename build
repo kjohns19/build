@@ -57,6 +57,9 @@ def load_libraries():
             for libname, libdata in libraries.items():
                 validate('library ' + libname, libdata, VALID_LIBRARIES)
                 LIBRARIES[libname] = libdata
+    librarynames = list(LIBRARIES.keys())
+    VALID_INFO['libraries'].append(librarynames)
+    VALID_TARGETS['libraries'].append(librarynames)
 
 def main():
     load_libraries()
@@ -97,8 +100,13 @@ def validate(name, data, valid):
                         if type(elem) is not listType:
                             invalidTypes.append([key, [listType], type(elem)])
                 if values is not None:
-                    if val not in values:
-                        invalidValues.append([key, values, val])
+                    if type(val) is list:
+                        vals = val
+                    else:
+                        vals = [val]
+                    for val in vals:
+                        if val not in values:
+                            invalidValues.append([key, values, val])
             else:
                 invalidTypes.append([key, valueType, type(val)])
         elif required:
