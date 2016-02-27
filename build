@@ -22,7 +22,25 @@ DEFAULT_INFO = OrderedDict([
     ])
 ])
 
-LIBRARYFILE = os.path.join(os.path.abspath(os.path.dirname(__file__)), ".build_libs")
+# [ type, required, values ]
+VALID_INFO = {
+    'projectname': [ str, True ],
+    'builddir': [ str, True ],
+    'cppflags': [ str, False ],
+    'cflags': [ str, False ],
+    'libraries': [ [str], False ],
+    'targets': [ [dict], True ],
+}
+VALID_TARGETS = {
+    'name': [ str, True ],
+    'type': [ str, False, ['executable', 'sharedlib', 'staticlib'] ],
+    'srcs': [ [str], True ],
+    'cppflags': [ str, False ],
+    'cflags': [ str, False ],
+    'libraries': [ [str], False ],
+}
+
+LIBRARYFILE = os.path.join(os.path.abspath(os.path.dirname(__file__)), '.build_libs')
 with open(LIBRARYFILE) as config_file:
     LIBRARIES = json.load(config_file)
     keys = ['find_package', 'pkg_check', 'include_dirs', 'link_dirs', 'link_libs']
@@ -49,55 +67,56 @@ def parse_args():
 
     return args
 
-VALIDATE_ERROR_MSG = 'ERROR - invalid build info file:'
-
-def validate_keys(keys, required, optional):
-    missing = list(required - keys)
-    invalid = list(keys - (required | optional))
-    if missing or invalid:
-        print(VALIDATE_ERROR_MSG)
-        if missing:
-            print('    Missing required values: ' + ', '.join(missing))
-        if invalid:
-            print('    Invalid values: ' + ', '.join(invalid))
-        sys.exit(1)
-
-def validate_type(type):
-    types = set(['executable', 'staticlib', 'sharedlib'])
-    if type not in types:
-        print(VALIDATE_ERROR_MSG)
-        print('    Invalid target type: ' + type)
-        sys.exit(1)
-
-def validate_libraries(libraries):
-    invalid = libraries - set(LIBRARIES.keys())
-    if invalid:
-        print(VALIDATE_ERROR_MSG)
-        print('    Invalid library: ' + ', '.join(invalid))
+def validate(name, data, valid):
+    missingRequired = []
+    invalidTypes = []
+    invalidValues = []
+    for key, value in valid.items():
+        valueType = value[0]
+        if type(valueType) is list:
+            listType = valueType[0]
+            valueType = list
+        required = value[1]
+        if len(value) == 3:
+            values = value[2]
+        else:
+            values = None
+        if key in data:
+            val = data[key]
+            if type(val) is valueType:
+                if type(val) is list:
+                    for elem in val:
+                        if type(elem) is not listType:
+                            invalidTypes.append([key, [listType], type(elem)])
+                if values is not None:
+                    if val not in values:
+                        invalidValues.append([key, values, val])
+            else:
+                invalidTypes.append([key, valueType, type(val)])
+        elif required:
+            missingRequired.append(key)
+    if missingRequired or invalidTypes or invalidValues:
+        print('ERROR: Invalid ' + name + ':')
+        if missingRequired:
+            print('    Missing required values: ' + ', '.join(missingRequired))
+        for key, expected, actual in invalidTypes:
+            if type(expected) is list:
+                message = 'Invalid type in \'' + key + '\' list: '
+                expected = expected[0]
+            else:
+                message = 'Invalid type for \'' + key + '\': '
+            print('    ' + message +
+                  'expected: ' + str(expected) + ', actual: ' + str(actual))
+        for key, expected, actual in invalidValues:
+            print('    Invalid value for \'' + key + '\': ' +
+                  'expected one of [' + ', '.join(expected) + '], ' +
+                  'actual: ' + actual)
         sys.exit(1)
 
 def validate_info(info):
-    required = set(['projectname', 'builddir', 'targets'])
-    optional = set(['libraries', 'cflags', 'cppflags'])
-    validate_keys(set(info.keys()), required, optional)
-    global_libraries = set(info.get('libraries') or [])
-    global_cflags = info.get('cflags') or ''
-    global_cppflags = info.get('cppflags') or ''
-
-    validate_libraries(global_libraries)
-
-    required = set(['name', 'srcs'])
-    optional = optional | set(['type'])
-    for target in info['targets']:
-        target.setdefault('type', 'executable')
-        validate_type(target['type'])
-        keys = set(target.keys())
-        validate_keys(set(target.keys()), required, optional)
-        target['libraries'] = global_libraries | set(target.get('libaries') or [])
-        target['cflags'] = (global_cflags + (target.get('cflags') or '')).strip()
-        target['cppflags'] = (global_cppflags + (target.get('cppflags') or '')).strip()
-        validate_libraries(target['libraries'])
-
+    validate('build info file', info, VALID_INFO)
+    for count, target in enumerate(info['targets']):
+        validate('target(' + str(count+1) + ')', target, VALID_TARGETS)
 
 def read_info(filename):
     data = {}
