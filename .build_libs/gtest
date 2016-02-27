@@ -1,0 +1,7 @@
+{
+    "gtest": {
+        "find_package": [ "GTest REQUIRED" ],
+        "include_dirs": [ "${GTEST_INCLUDE_DIRS}" ],
+        "link_libs":    [ "${GTEST_LIBRARIES}", "${GTEST_MAIN_LIBRARIES}", "pthread" ]
+    }
+}

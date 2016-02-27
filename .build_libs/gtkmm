@@ -1,0 +1,8 @@
+{
+    "gtkmm": {
+        "pkg_check":    [ "GTKMM REQUIRED gtkmm-3.0" ],
+        "include_dirs": [ "${GTKMM_INCLUDE_DIRS}" ],
+        "link_dirs":    [ "${GTKMM_LIBRARY_DIRS}" ],
+        "link_libs":    [ "${GTKMM_LIBRARIES}" ]
+    }
+}

@@ -1,0 +1,8 @@
+{
+    "glibmm": {
+        "pkg_check":    [ "GLIBMM REQUIRED glibmm-2.4" ],
+        "include_dirs": [ "${GLIBMM_INCLUDE_DIRS}" ],
+        "link_dirs":    [ "${GLIBMM_LIBRARY_DIRS}" ],
+        "link_libs":    [ "${GLIBMM_LIBRARIES}" ]
+    }
+}

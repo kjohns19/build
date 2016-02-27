@@ -1,0 +1,5 @@
+{
+    "sfml": {
+        "link_libs":    [ "sfml-system", "sfml-window", "sfml-graphics" ]
+    }
+}

@@ -1,0 +1,5 @@
+{
+    "pthread": {
+        "link_libs":    [ "pthread" ]
+    }
+}
