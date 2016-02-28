@@ -6,6 +6,8 @@ import os.path
 import time
 import sys
 import glob
+import shutil
+import subprocess
 from collections import OrderedDict
 
 #TODO put in config file
@@ -48,6 +50,8 @@ VALID_LIBRARIES = {
     'link_libs':    [ [str], True ],
 }
 
+CMAKEFILES = [ 'CMakeLists.txt', 'CMakeCache.txt', 'CMakeFiles', 'cmake_install.cmake', 'Makefile']
+
 LIBRARIES = {}
 def load_libraries_dir(directory):
     for libfilename in glob.glob(os.path.join(directory, '*')):
@@ -68,11 +72,16 @@ def load_libraries(info):
 
 def main():
     args = parse_args()
-    info = read_info(args.file)
-    load_libraries(info['info'])
-    validate_info(info['info'])
-    if info['need_init']:
-        generate_cmake(info)
+    data = read_info(args.file)
+    info = data['info']
+    load_libraries(info)
+    validate_info(info)
+    builddir = info['builddir']
+    os.makedirs(builddir, exist_ok=True)
+    if data['need_init']:
+        generate_cmake(info, data['cmakefile'])
+        run_cmake(builddir)
+    run_make(builddir)
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -85,6 +94,25 @@ def parse_args():
         args.file = 'build.info'
 
     return args
+
+def move_cmake_files(srcdir, destdir):
+    for file in CMAKEFILES:
+        src = os.path.join(srcdir, file)
+        dest = os.path.join(destdir, file)
+        try:
+            shutil.move(src, dest)
+        except FileNotFoundError:
+            pass
+
+def run_cmake(builddir):
+    move_cmake_files(builddir, '.')
+    subprocess.call(['cmake', '.'])
+    move_cmake_files('.', builddir)
+
+def run_make(builddir):
+    move_cmake_files(builddir, '.')
+    subprocess.call(['make'])
+    move_cmake_files('.', builddir)
 
 def validate(name, data, valid):
     missingRequired = []
@@ -155,10 +183,10 @@ def read_info(filename):
         new_file = True
 
     build_dir = data['info'].get('builddir') or DEFAULT_INFO['builddir']
-    cmake_file = os.path.join(build_dir, 'CMakeLists.txt')
-    if not new_file and os.path.isfile(cmake_file):
+    data['cmakefile'] = os.path.join(build_dir, 'CMakeLists.txt')
+    if not new_file and os.path.isfile(data['cmakefile']):
         info_ts = time.ctime(os.path.getmtime(filename))
-        cmake_ts = time.ctime(os.path.getmtime(cmake_file))
+        cmake_ts = time.ctime(os.path.getmtime(data['cmakefile']))
         data['need_init'] = (info_ts > cmake_ts)
     else:
         data['need_init'] = True
@@ -169,9 +197,7 @@ def unique_list(lst):
     seen = set()
     return [elem for elem in lst if not (elem in seen or seen.add(elem))]
 
-def generate_cmake(data):
-    info = data['info']
-
+def generate_cmake(info, filename):
     cmake_data = [
         'cmake_minimum_required(VERSION 2.8 FATAL_ERROR)',
         '',
@@ -237,7 +263,8 @@ def generate_cmake(data):
             links = ' '.join(link_libs)
             cmake_data.append('target_link_libraries(' + name + ' ' + links + ')')
 
-    print('\n'.join(cmake_data))
+    with open(filename, 'w') as f:
+        print('\n'.join(cmake_data), file=f)
 
 
 if __name__ == '__main__':
