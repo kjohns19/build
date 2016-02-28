@@ -12,7 +12,7 @@ from collections import OrderedDict
 DEFAULT_INFO = OrderedDict([
     ('projectname', 'example'),
     ('builddir', 'build.dir'),
-    ('cppflags', '-std=c++14 -g -Wall -Werror'),
+    ('flags', '-std=c++14 -g -Wall -Werror'),
     ('include_dirs', [ 'src' ]),
     ('targets', [
         OrderedDict([
@@ -49,22 +49,28 @@ VALID_LIBRARIES = {
 }
 
 LIBRARIES = {}
-def load_libraries():
-    LIBRARYDIR = os.path.join(os.path.abspath(os.path.dirname(__file__)), '.build_libs')
-    for libfilename in glob.glob(os.path.join(LIBRARYDIR, '*')):
+def load_libraries_dir(directory):
+    for libfilename in glob.glob(os.path.join(directory, '*')):
         with open(libfilename) as libfile:
             libraries = json.load(libfile)
             for libname, libdata in libraries.items():
                 validate('library ' + libname, libdata, VALID_LIBRARIES)
                 LIBRARIES[libname] = libdata
+def load_libraries(info):
+    librarydir = os.path.join(os.path.abspath(os.path.dirname(__file__)), '.build_libs')
+    builddir = info.get('builddir') or DEFAULT_INFO['builddir']
+    buildlibdir = os.path.join(builddir, 'libs')
+    load_libraries_dir(librarydir)
+    load_libraries_dir(buildlibdir)
     librarynames = list(LIBRARIES.keys())
     VALID_INFO['libraries'].append(librarynames)
     VALID_TARGETS['libraries'].append(librarynames)
 
 def main():
-    load_libraries()
     args = parse_args()
     info = read_info(args.file)
+    load_libraries(info['info'])
+    validate_info(info['info'])
     if info['need_init']:
         generate_cmake(info)
 
@@ -147,9 +153,8 @@ def read_info(filename):
         with open(filename, 'w') as f:
             json.dump(data['info'], f, indent=4)
         new_file = True
-    validate_info(data['info'])
 
-    build_dir = data['info']['builddir']
+    build_dir = data['info'].get('builddir') or DEFAULT_INFO['builddir']
     cmake_file = os.path.join(build_dir, 'CMakeLists.txt')
     if not new_file and os.path.isfile(cmake_file):
         info_ts = time.ctime(os.path.getmtime(filename))
@@ -169,11 +174,14 @@ def generate_cmake(data):
         'project(' + info['projectname'] + ')',
     ]
 
-    all_libraries = set(info['libraries'])
+    base_libraries = set(info['libraries'])
+    all_libraries = set(base_libraries)
     target_libraries = {}
     for target in info['targets']:
-        target_libraries[target['name']] = [LIBRARIES[l] for l in target['libraries']]
-        all_libraries |= set(target['libraries'])
+        target_libs = set(target['libraries'])
+        all_libraries |= target_libs
+        libs = base_libraries | target_libs
+        target_libraries[target['name']] = [LIBRARIES[l] for l in libs]
     lib_data = [LIBRARIES[lib] for lib in all_libraries]
 
     find_packs = sum([lib['find_package'] for lib in lib_data], [])
