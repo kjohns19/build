@@ -165,6 +165,10 @@ def read_info(filename):
 
     return data
 
+def unique_list(lst):
+    seen = set()
+    return [elem for elem in lst if not (elem in seen or seen.add(elem))]
+
 def generate_cmake(data):
     info = data['info']
 
@@ -174,15 +178,15 @@ def generate_cmake(data):
         'project(' + info['projectname'] + ')',
     ]
 
-    base_libraries = set(info['libraries'])
-    all_libraries = set(base_libraries)
+    base_libraries = info['libraries']
+    all_libraries = base_libraries.copy()
     target_libraries = {}
     for target in info['targets']:
-        target_libs = set(target['libraries'])
-        all_libraries |= target_libs
-        libs = base_libraries | target_libs
+        target_libs = target['libraries']
+        all_libraries += target_libs
+        libs = base_libraries + target_libs
         target_libraries[target['name']] = [LIBRARIES[l] for l in libs]
-    lib_data = [LIBRARIES[lib] for lib in all_libraries]
+    lib_data = [LIBRARIES[lib] for lib in unique_list(all_libraries)]
 
     find_packs = sum([lib['find_package'] for lib in lib_data], [])
     pkg_checks = sum([lib['pkg_check']    for lib in lib_data], [])
