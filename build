@@ -78,6 +78,7 @@ def main():
     validate_info(info)
     builddir = info['builddir']
     os.makedirs(builddir, exist_ok=True)
+    check_source_files(data)
     if data['need_init']:
         generate_cmake(info, data['cmakefile'])
         run_cmake(builddir)
@@ -192,6 +193,34 @@ def read_info(filename):
         data['need_init'] = True
 
     return data
+
+def get_sources(pattern):
+    if '*' not in pattern:
+        return [ pattern ]
+    filedir = os.path.dirname(pattern)
+    filename = os.path.basename(pattern)
+    command = ['find', filedir, '-maxdepth', '1', '-name', filename]
+    with subprocess.Popen(command, stdout=subprocess.PIPE) as proc:
+        stdout, stderr = proc.communicate()
+        return list(filter(None, stdout.decode('utf-8').split('\n')))
+
+def check_source_files(data):
+    info = data['info']
+    srcdir = os.path.join(info['builddir'], 'srcs')
+    os.makedirs(srcdir, exist_ok=True)
+    all_srcs = {}
+    for srcfile in glob.glob(os.path.join(srcdir, '*')):
+        with open(srcfile, 'r') as f:
+            target = os.path.basename(srcfile)
+            all_srcs[target] = list(filter(None, f.read().split('\n')))
+            os.remove(srcfile)
+    for target in info['targets']:
+        name = target['name']
+        srcs = [src for srcs in target['srcs'] for src in get_sources(srcs)]
+        if name not in all_srcs or all_srcs[name] != srcs:
+            data['need_init'] = True
+        with open(os.path.join(srcdir, name), 'w') as f:
+            print('\n'.join(srcs), file=f)
 
 def unique_list(lst):
     seen = set()
