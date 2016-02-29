@@ -73,6 +73,8 @@ def load_libraries(info):
 def main():
     args = parse_args()
     data = read_info(args.file)
+    data['no_cmake'] = args.nocmake
+    data['no_make'] = args.nomake
     info = data['info']
     load_libraries(info)
     validate_info(info)
@@ -81,14 +83,22 @@ def main():
     check_source_files(data)
     if data['need_init']:
         generate_cmake(info, data['cmakefile'])
-        run_cmake(builddir)
-    run_make(builddir)
+        if not data['no_cmake']:
+            run_cmake(builddir)
+    if not data['no_make']:
+        run_make(builddir)
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '-f', '--file', action='store',
         help='Use FILE as the build file')
+    parser.add_argument(
+        '-c', '--nocmake', action='store_true',
+        help='Don\'t run cmake')
+    parser.add_argument(
+        '-m', '--nomake', action='store_true',
+        help='Don\'t run make')
     args = parser.parse_args()
 
     if args.file is None:
@@ -200,7 +210,7 @@ def get_sources(pattern):
     filedir = os.path.dirname(pattern)
     filename = os.path.basename(pattern)
     command = ['find', filedir, '-maxdepth', '1', '-name', filename]
-    with subprocess.Popen(command, stdout=subprocess.PIPE) as proc:
+    with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL) as proc:
         stdout, stderr = proc.communicate()
         return list(filter(None, stdout.decode('utf-8').split('\n')))
 
@@ -217,6 +227,9 @@ def check_source_files(data):
     for target in info['targets']:
         name = target['name']
         srcs = [src for srcs in target['srcs'] for src in get_sources(srcs)]
+        if not srcs:
+            data['no_cmake'] = True
+            data['no_make'] = True
         if name not in all_srcs or all_srcs[name] != srcs:
             data['need_init'] = True
         with open(os.path.join(srcdir, name), 'w') as f:
