@@ -36,7 +36,7 @@ VALID_LIBRARIES = {
     'link_libs':    [ [str], True ],
 }
 
-CMAKEFILES = [ 'CMakeLists.txt', 'CMakeCache.txt', 'CMakeFiles', 'cmake_install.cmake', 'Makefile']
+CMAKEFILES = [ 'CMakeCache.txt', 'CMakeFiles', 'cmake_install.cmake', 'Makefile' ]
 
 LIBRARIES = {}
 def load_libraries_dir(directory):
@@ -217,13 +217,13 @@ def read_info(filename):
         with open(filename, 'r') as f:
             data['info'] = json.load(f)
     else:
-        print('ERROR: build info file  \'' + filename + '\' does not exist',
+        print('ERROR: build info file \'' + filename + '\' does not exist',
               file=sys.stderr)
         sys.exit(1)
 
     build_dir = data['info'].get('builddir')
     if build_dir:
-        data['cmakefile'] = os.path.join(build_dir, 'CMakeLists.txt')
+        data['cmakefile'] = 'CMakeLists.txt'
         if os.path.isfile(data['cmakefile']):
             info_ts = time.ctime(os.path.getmtime(filename))
             cmake_ts = time.ctime(os.path.getmtime(data['cmakefile']))
@@ -334,8 +334,10 @@ def generate_cmake(info, filename):
             links = ' '.join(link_libs)
             cmake_data.append('target_link_libraries(' + name + ' ' + links + ')')
 
+    move_cmake_files('.', info['builddir'])
     with open(filename, 'w') as f:
         print('\n'.join(cmake_data), file=f)
+    move_cmake_files(info['builddir'], '.')
 
 
 if __name__ == '__main__':
