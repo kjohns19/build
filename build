@@ -65,14 +65,14 @@ def main():
     args = parse_args()
     if args.projectname:
         copy_template(args.file, args.projectname, args.template)
-        if not args.nogit:
-            init_git()
     data = read_info(args.file)
     data['no_cmake'] = args.nocmake
     data['no_make'] = args.nomake
     info = data['info']
     load_libraries(info)
     validate_info(info)
+    if args.projectname and not args.nogit:
+        init_git(info)
     builddir = info['builddir']
     os.makedirs(builddir, exist_ok=True)
     check_source_files(data)
@@ -164,9 +164,43 @@ def run_command(command):
     print('Running ' + ' '.join(command))
     subprocess.call(command);
 
-def init_git():
+def init_git(info):
     command = ['git', 'init']
     run_command(command)
+    gitignore = [
+        '# CMake files',
+        '/CMakeCache.txt',
+        '/CMakeFiles/',
+        '/Makefile',
+        '/cmake_install.cmake',
+        '',
+        '# Build dir',
+        '/build.dir',
+        '',
+        '# Vim swap files',
+        '*.swp',
+        '*.swo',
+        '',
+        '# Object files',
+        '*.o',
+        '',
+        '# Libraries',
+        '*.a',
+        '*.so',
+        '',
+        '# Install manifest',
+        '/install_manifest.txt',
+    ]
+    executables = []
+    for target in info['targets']:
+        if target['type'] == 'executable':
+            executables.append(target['name'])
+    if executables:
+        gitignore.append('')
+        gitignore.append('# Executables')
+        gitignore.append('\n'.join(['/' + exe for exe in executables]))
+    with open('.gitignore', 'w') as f:
+        print('\n'.join(gitignore), file=f)
 
 def run_cmake(builddir):
     move_cmake_files(builddir, '.')
