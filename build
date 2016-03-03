@@ -65,6 +65,8 @@ def main():
     args = parse_args()
     if args.projectname:
         copy_template(args.file, args.projectname, args.template)
+        if not args.nogit:
+            init_git()
     data = read_info(args.file)
     data['no_cmake'] = args.nocmake
     data['no_make'] = args.nomake
@@ -104,6 +106,9 @@ def parse_args():
     parser.add_argument(
         'make_args', action='store', nargs='*',
         help='Pass argument to make')
+    parser.add_argument(
+        '-g', '--nogit', action='store_true',
+        help='With -i/--init, don\'t create a git repository')
     args = parser.parse_args()
 
     if args.file is None:
@@ -155,19 +160,25 @@ def move_cmake_files(srcdir, destdir):
         except FileNotFoundError:
             pass
 
+def run_command(command):
+    print('Running ' + ' '.join(command))
+    subprocess.call(command);
+
+def init_git():
+    command = ['git', 'init']
+    run_command(command)
+
 def run_cmake(builddir):
     move_cmake_files(builddir, '.')
     command = ['cmake', '.']
-    print('Running ' + ' '.join(command))
-    subprocess.call(command)
+    run_command(command)
     move_cmake_files('.', builddir)
 
 def run_make(builddir, sudo, args):
     move_cmake_files(builddir, '.')
     command = ['sudo'] if sudo else []
     command += ['make'] + args
-    print('Running ' + ' '.join(command))
-    subprocess.call(command)
+    run_command(command)
     move_cmake_files('.', builddir)
 
 def validate(name, data, valid):
