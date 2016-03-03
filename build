@@ -101,14 +101,14 @@ def parse_args():
         '-m', '--nomake', action='store_true',
         help='Don\'t run make')
     parser.add_argument(
-        '-s', '--makesudo', action='store_true', dest='sudo',
+        '-g', '--nogit', action='store_true',
+        help='Don\'t create a git repository (with -i/--init)')
+    parser.add_argument(
+        '-s', '--sudo', action='store_true',
         help='Run make with sudo')
     parser.add_argument(
         'make_args', action='store', nargs='*',
         help='Pass argument to make')
-    parser.add_argument(
-        '-g', '--nogit', action='store_true',
-        help='With -i/--init, don\'t create a git repository')
     args = parser.parse_args()
 
     if args.file is None:
