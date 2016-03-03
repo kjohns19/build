@@ -20,6 +20,7 @@ VALID_INFO = {
     'libraries': [ [str], False, [] ],
     'targets': [ [dict], True ],
     'include_dirs': [ [str], False, [] ],
+    'copy': [ [str], False, [] ],
 }
 VALID_TARGETS = {
     'name': [ str, True ],
@@ -28,6 +29,8 @@ VALID_TARGETS = {
     'flags': [ str, False, '' ],
     'libraries': [ [str], False, [] ],
     'include_dirs': [ [str], False, [] ],
+    'install_to': [ [str], False, [] ],
+    'install_includes': [ [str], False, [] ],
 }
 VALID_LIBRARIES = {
     'find_package': [ [str], False, [] ],
@@ -76,7 +79,7 @@ def main():
         if not data['no_cmake']:
             run_cmake(builddir)
     if not data['no_make']:
-        run_make(builddir)
+        run_make(builddir, args.sudo, args.make_args)
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -95,6 +98,12 @@ def parse_args():
     parser.add_argument(
         '-m', '--nomake', action='store_true',
         help='Don\'t run make')
+    parser.add_argument(
+        '-s', '--makesudo', action='store_true', dest='sudo',
+        help='Run make with sudo')
+    parser.add_argument(
+        'make_args', action='store', nargs='*',
+        help='Pass argument to make')
     args = parser.parse_args()
 
     if args.file is None:
@@ -148,12 +157,17 @@ def move_cmake_files(srcdir, destdir):
 
 def run_cmake(builddir):
     move_cmake_files(builddir, '.')
-    subprocess.call(['cmake', '.'])
+    command = ['cmake', '.']
+    print('Running ' + ' '.join(command))
+    subprocess.call(command)
     move_cmake_files('.', builddir)
 
-def run_make(builddir):
+def run_make(builddir, sudo, args):
     move_cmake_files(builddir, '.')
-    subprocess.call(['make'])
+    command = ['sudo'] if sudo else []
+    command += ['make'] + args
+    print('Running ' + ' '.join(command))
+    subprocess.call(command)
     move_cmake_files('.', builddir)
 
 def validate(name, data, valid):
@@ -239,7 +253,7 @@ def get_sources(pattern):
         return [ pattern ]
     filedir = os.path.dirname(pattern)
     filename = os.path.basename(pattern)
-    command = ['find', filedir, '-maxdepth', '1', '-name', filename]
+    command = ['find', filedir, '-name', filename]
     with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL) as proc:
         stdout, stderr = proc.communicate()
         return list(filter(None, stdout.decode('utf-8').split('\n')))
@@ -276,6 +290,8 @@ def generate_cmake(info, filename):
         'project(' + info['projectname'] + ')',
     ]
 
+    print('Generating CMakeLists.txt')
+
     base_libraries = info['libraries']
     all_libraries = base_libraries.copy()
     target_libraries = {}
@@ -305,13 +321,18 @@ def generate_cmake(info, filename):
     if link_dirs:
         cmake_data.append('link_directories(' + ' '.join(link_dirs) + ')')
 
+    install_libs = []
+    install_srcs = []
+
+    install_types = set()
+
     for target in info['targets']:
         name = target['name']
         libs = target_libraries[name]
         cmake_data.append('')
         files_var = 'SRC_FILES_' + name
         cmake_data.append(
-            'file(GLOB ' + files_var + ' ' + ' '.join(target['srcs']) + ')')
+            'file(GLOB_RECURSE ' + files_var + ' ' + ' '.join(target['srcs']) + ')')
         type_dict = {
             'executable': 'add_executable(' + name + ' ${' + files_var + '})',
             'sharedlib': 'add_library(' + name + ' SHARED ${' + files_var + '})',
@@ -334,6 +355,48 @@ def generate_cmake(info, filename):
         if link_libs:
             links = ' '.join(link_libs)
             cmake_data.append('target_link_libraries(' + name + ' ' + links + ')')
+
+        install_types = {
+            'executable': 'RUNTIME',
+            'sharedlib': 'LIBRARY',
+            'staticlib': 'ARCHIVE'
+        }
+        install_type = install_types[target['type']]
+        for dest in target['install_to']:
+            cmake_data.append('install(TARGETS ' + name + ' ' + install_type +
+                              ' DESTINATION ' + dest + ')')
+
+        include_files = []
+        include_patterns = []
+        for include in target['install_includes']:
+            if '*' in include:
+                srcdir = os.path.dirname(include)
+                if srcdir[-1] != '/':
+                    srcdir += '/'
+                pattern = os.path.basename(include)
+                include_patterns.append([srcdir, pattern])
+            else:
+                include_files.append(include)
+        if target['type'] in ('sharedlib', 'staticlib') and target.get('install'):
+            install_libs.append(name)
+            install_types.add(target['type'])
+            
+    if install_libs:
+        cmake_data.append('install(TARGETS ' + ' '.join(install_libs) +
+                          'ARCHIVE DESTINATION lib)')
+
+    if include_files:
+        files = ' '.join(include_files)
+        cmake_data.append('install(FILES ' + files + ' DESTINATION include)')
+    for include_pattern in include_patterns:
+        srcdir = include_pattern[0]
+        pattern = include_pattern[1]
+        cmake_data.append('install(DIRECTORY ' + srcdir +
+                          ' DESTINATION include FILES_MATCHING PATTERN "' +
+                          pattern + '")')
+
+    for copy in info['copy']:
+        cmake_data.append(copy)
 
     move_cmake_files('.', info['builddir'])
     with open(filename, 'w') as f:
