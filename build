@@ -139,8 +139,8 @@ def copy_template(file, projectname, template):
     all_template_dir = os.path.join(BUILDDATADIR, 'templates')
     templatedir = os.path.join(all_template_dir, template)
     if not os.path.isdir(templatedir):
-        all_templates = [d for d in os.listdir(all_template_dir)
-                         if os.path.isdir(os.path.join(all_template_dir, d))]
+        all_templates = sorted([d for d in os.listdir(all_template_dir)
+                         if os.path.isdir(os.path.join(all_template_dir, d))])
         print('ERROR: Invalid template \'' + template + '\'. Valid templates: ' +
               ', '.join(all_templates), file=sys.stderr)
         sys.exit(1)
