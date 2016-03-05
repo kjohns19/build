@@ -83,13 +83,14 @@ def main():
         run_make(builddir, args.sudo, args.make_args)
 
 def parse_args():
-    parser = argparse.ArgumentParser()
+    desc = 'Easy to use wrapper script around cmake and make'
+    parser = argparse.ArgumentParser(description=desc)
     parser.add_argument(
         '-f', '--file', action='store',
         help='Use FILE as the build file')
     parser.add_argument(
         '-i', '--init', action='store', dest='projectname',
-        help='Initialize a new project build')
+        help='Initialize a new project build. This generates a new build.info file.')
     parser.add_argument(
         '-t', '--template', action='store',
         help='With -i/--init, use a template for initialization')
@@ -283,7 +284,8 @@ def read_info(filename):
     if os.path.isfile(filename):
         data['info'] = load_json(filename)
     else:
-        print('ERROR: build info file \'' + filename + '\' does not exist',
+        print('ERROR: build info file \'' + filename + '\' does not exist. ' +
+              'Run \'build --help\' for help',
               file=sys.stderr)
         sys.exit(1)
 
