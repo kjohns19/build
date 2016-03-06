@@ -67,6 +67,7 @@ def main():
     data = read_info(args.file)
     data['no_cmake'] = args.nocmake
     data['no_make'] = args.nomake
+    data['run_cmake'] = False
     info = data['info']
     load_libraries(info)
     validate_info(info)
@@ -77,8 +78,9 @@ def main():
     check_source_files(data)
     if data['need_init']:
         generate_cmake(info, data['cmakefile'])
-        if not data['no_cmake']:
-            run_cmake(builddir)
+        data['run_cmake'] = True
+    if data['run_cmake'] and not data['no_cmake']:
+        run_cmake(builddir)
     if not data['no_make']:
         run_make(builddir, args.sudo, args.make_args)
 
@@ -328,7 +330,7 @@ def check_source_files(data):
             data['no_cmake'] = True
             data['no_make'] = True
         if name not in all_srcs or all_srcs[name] != srcs:
-            data['need_init'] = True
+            data['run_cmake'] = True
         with open(os.path.join(srcdir, name), 'w') as f:
             print('\n'.join(srcs), file=f)
 
