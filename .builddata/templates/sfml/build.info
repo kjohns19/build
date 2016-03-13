@@ -2,13 +2,13 @@
     "projectname": "${project}",
     "builddir": "build.dir",
     "flags": "-std=c++14 -g -Wall -Werror",
-    "include_dirs": [ "src" ],
-    "libraries": [ "sfml" ],
     "targets": [
         {
             "name": "${project}",
             "type": "executable",
-            "srcs": [ "src/*.cpp" ]
+            "srcs": [ "src/*.cpp" ],
+            "include_dirs": [ "src" ],
+            "libraries": [ "sfml" ],
         }
     ]
 }

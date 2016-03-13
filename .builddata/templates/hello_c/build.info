@@ -2,12 +2,12 @@
     "projectname": "${project}",
     "builddir": "build.dir",
     "flags": "-std=c11 -g -Wall -Werror",
-    "include_dirs": [ "src" ],
     "targets": [
         {
             "name": "${project}",
             "type": "executable",
-            "srcs": [ "src/*.c" ]
+            "srcs": [ "src/*.c" ],
+            "include_dirs": [ "src" ]
         }
     ]
 }
