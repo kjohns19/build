@@ -239,16 +239,20 @@ def generate_gitignore(info):
 
 def run_cmake(builddir):
     move_cmake_files(builddir, '.')
-    command = ['cmake', '.']
-    run_command(command)
-    move_cmake_files('.', builddir)
+    try:
+        command = ['cmake', '.']
+        run_command(command)
+    finally:
+        move_cmake_files('.', builddir)
 
 def run_make(builddir, sudo, args):
     move_cmake_files(builddir, '.')
-    command = ['sudo'] if sudo else []
-    command += ['make'] + args
-    run_command(command)
-    move_cmake_files('.', builddir)
+    try:
+        command = ['sudo'] if sudo else []
+        command += ['make'] + args
+        run_command(command)
+    finally:
+        move_cmake_files('.', builddir)
 
 def validate(name, data, valid):
     missingRequired = []
@@ -485,10 +489,15 @@ def generate_cmake(info, filename):
         cmake_data.append(copy)
 
     move_cmake_files('.', info['builddir'])
-    with open(filename, 'w') as f:
-        print('\n'.join(cmake_data), file=f)
-    move_cmake_files(info['builddir'], '.')
+    try:
+        with open(filename, 'w') as f:
+            print('\n'.join(cmake_data), file=f)
+    finally:
+        move_cmake_files(info['builddir'], '.')
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print('build: Interrupt')
