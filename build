@@ -62,6 +62,9 @@ def load_libraries(info):
 
 def main():
     args = parse_args()
+    if args.listtemplates:
+        print('Available templates: ' + ', '.join(all_templates()))
+        return
     if args.projectname:
         copy_template(args.file, args.projectname, args.template)
     data = read_info(args.file)
@@ -100,6 +103,9 @@ def parse_args():
     parser.add_argument(
         '-t', '--template', action='store',
         help='With -i/--init, use a template for initialization')
+    parser.add_argument(
+        '-T', '--listtemplates', action='store_true',
+        help='List all available templates')
     parser.add_argument(
         '-c', '--nocmake', action='store_true',
         help='Don\'t run cmake')
@@ -147,14 +153,17 @@ def copy_file(file, dest):
         else:
             raise
 
+def all_templates():
+    all_template_dir = os.path.join(BUILDDATADIR, 'templates')
+    return sorted([d for d in os.listdir(all_template_dir)
+                   if os.path.isdir(os.path.join(all_template_dir, d))])
+
 def copy_template(file, projectname, template):
     all_template_dir = os.path.join(BUILDDATADIR, 'templates')
     templatedir = os.path.join(all_template_dir, template)
     if not os.path.isdir(templatedir):
-        all_templates = sorted([d for d in os.listdir(all_template_dir)
-                         if os.path.isdir(os.path.join(all_template_dir, d))])
         print('ERROR: Invalid template \'' + template + '\'. Valid templates: ' +
-              ', '.join(all_templates), file=sys.stderr)
+              ', '.join(all_templates()), file=sys.stderr)
         sys.exit(1)
     buildinfo = os.path.join(templatedir, 'build.info')
     if not os.path.isfile(buildinfo):
