@@ -8,7 +8,7 @@
             "type": "executable",
             "srcs": [ "src/*.cpp" ],
             "include_dirs": [ "src" ],
-            "libraries": [ "sfml" ],
+            "libraries": [ "sfml" ]
         }
     ]
 }
