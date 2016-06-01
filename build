@@ -51,11 +51,10 @@ def load_libraries_dir(directory):
             LIBRARIES[libname] = libdata
 def load_libraries(info):
     librarydir = os.path.join(BUILDDATADIR, 'libs')
-    builddir = info.get('builddir')
-    if builddir:
-        buildlibdir = os.path.join(builddir, 'libs')
     load_libraries_dir(librarydir)
-    load_libraries_dir(buildlibdir)
+    locallibs = info.get('locallibs')
+    if locallibs:
+        load_libraries_dir(locallibs)
     librarynames = list(LIBRARIES.keys())
     VALID_INFO['libraries'].append(librarynames)
     VALID_TARGETS['libraries'].append(librarynames)
