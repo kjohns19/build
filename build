@@ -332,8 +332,8 @@ def read_info(filename):
     if build_dir:
         cmakefile = 'CMakeLists.txt'
         if os.path.isfile(cmakefile):
-            info_ts = time.ctime(os.path.getmtime(filename))
-            cmake_ts = time.ctime(os.path.getmtime(cmakefile))
+            info_ts = os.path.getmtime(filename)
+            cmake_ts = os.path.getmtime(cmakefile)
             data['need_init'] = (info_ts > cmake_ts)
         else:
             data['need_init'] = True
