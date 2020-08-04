@@ -1,6 +1,7 @@
 #!/usr/bin/env python3.8
 
 import argparse
+import contextlib
 import errno
 import json
 import os
@@ -185,14 +186,22 @@ def copy_template(buildfile, projectname, template):
         copy_file(filename, filename.name)
 
 
+@contextlib.contextmanager
 def move_cmake_files(srcdir, destdir):
-    for file in CMAKEFILES:
-        src = srcdir / file
-        dest = destdir / file
-        try:
-            shutil.move(src, dest)
-        except FileNotFoundError:
-            pass
+    def do_move(srcdir, destdir):
+        for file in CMAKEFILES:
+            src = srcdir / file
+            dest = destdir / file
+            try:
+                shutil.move(src, dest)
+            except FileNotFoundError:
+                pass
+
+    do_move(srcdir, destdir)
+    try:
+        yield
+    finally:
+        do_move(destdir, srcdir)
 
 
 def run_command(command):
@@ -254,22 +263,16 @@ def generate_gitignore(info):
 
 
 def run_cmake(builddir):
-    move_cmake_files(builddir, pathlib.Path.cwd())
-    try:
+    with move_cmake_files(builddir, pathlib.Path.cwd()):
         command = ['cmake', '.']
         run_command(command)
-    finally:
-        move_cmake_files(pathlib.Path.cwd(), builddir)
 
 
 def run_make(builddir, sudo, args):
-    move_cmake_files(builddir, pathlib.Path.cwd())
-    try:
+    with move_cmake_files(builddir, pathlib.Path.cwd()):
         command = ['sudo'] if sudo else []
         command += ['make'] + args
         run_command(command)
-    finally:
-        move_cmake_files(pathlib.Path.cwd(), builddir)
 
 
 def validate(name, data, valid):
@@ -507,12 +510,9 @@ def generate_cmake(info, filename):
         cmake_data.append(copy)
 
     builddir = pathlib.Path(info['builddir'])
-    move_cmake_files(pathlib.Path.cwd(), builddir)
-    try:
+    with move_cmake_files(pathlib.Path.cwd(), builddir):
         with open(filename, 'w') as f:
             print('\n'.join(cmake_data), file=f)
-    finally:
-        move_cmake_files(builddir, pathlib.Path.cwd())
 
 
 if __name__ == '__main__':
