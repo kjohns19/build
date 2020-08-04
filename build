@@ -1,54 +1,57 @@
 #!/usr/bin/env python3
 
 import argparse
+import errno
+import glob
 import json
 import os.path
-import time
-import sys
-import glob
 import shutil
 import subprocess
-import errno
+import sys
 
 BUILDDATADIR = os.path.join(os.path.abspath(os.path.dirname(__file__)), '.builddata')
 
-# [ type, required, default, values ]
+# [type, required, default, values]
 VALID_INFO = {
-    'projectname': [ str, True ],
-    'builddir': [ str, True ],
-    'flags': [ str, False, '' ],
-    'libraries': [ [str], False, [] ],
-    'targets': [ [dict], True ],
-    'include_dirs': [ [str], False, [] ],
-    'copy': [ [str], False, [] ],
+    'projectname': [str, True],
+    'builddir': [str, True],
+    'flags': [str, False, ''],
+    'libraries': [[str], False, []],
+    'targets': [[dict], True],
+    'include_dirs': [[str], False, []],
+    'copy': [[str], False, []],
 }
 VALID_TARGETS = {
-    'name': [ str, True ],
-    'type': [ str, False, 'executable', ['executable', 'sharedlib', 'staticlib'] ],
-    'srcs': [ [str], True ],
-    'flags': [ str, False, '' ],
-    'libraries': [ [str], False, [] ],
-    'include_dirs': [ [str], False, [] ],
-    'install_to': [ [str], False, [] ],
-    'install_includes': [ [str], False, [] ],
+    'name': [str, True],
+    'type': [str, False, 'executable', ['executable', 'sharedlib', 'staticlib']],
+    'srcs': [[str], True],
+    'flags': [str, False, ''],
+    'libraries': [[str], False, []],
+    'include_dirs': [[str], False, []],
+    'install_to': [[str], False, []],
+    'install_includes': [[str], False, []],
 }
 VALID_LIBRARIES = {
-    'find_package': [ [str], False, [] ],
-    'pkg_check':    [ [str], False, [] ],
-    'include_dirs': [ [str], False, [] ],
-    'link_dirs':    [ [str], False, [] ],
-    'link_libs':    [ [str], True ],
+    'find_package': [[str], False, []],
+    'pkg_check':    [[str], False, []],
+    'include_dirs': [[str], False, []],
+    'link_dirs':    [[str], False, []],
+    'link_libs':    [[str], True],
 }
 
-CMAKEFILES = [ 'CMakeCache.txt', 'CMakeFiles', 'cmake_install.cmake', 'Makefile' ]
+CMAKEFILES = ['CMakeCache.txt', 'CMakeFiles', 'cmake_install.cmake', 'Makefile']
 
 LIBRARIES = {}
+
+
 def load_libraries_dir(directory):
     for libfilename in glob.glob(os.path.join(directory, '*')):
         libraries = load_json(libfilename)
         for libname, libdata in libraries.items():
             validate('library ' + libname, libdata, VALID_LIBRARIES)
             LIBRARIES[libname] = libdata
+
+
 def load_libraries(info):
     librarydir = os.path.join(BUILDDATADIR, 'libs')
     load_libraries_dir(librarydir)
@@ -58,6 +61,7 @@ def load_libraries(info):
     librarynames = list(LIBRARIES.keys())
     VALID_INFO['libraries'].append(librarynames)
     VALID_TARGETS['libraries'].append(librarynames)
+
 
 def main():
     args = parse_args()
@@ -89,6 +93,7 @@ def main():
         run_cmake(builddir)
     if not data['no_make']:
         run_make(builddir, args.sudo, args.make_args)
+
 
 def parse_args():
     desc = 'Easy to use wrapper script around cmake and make'
@@ -135,6 +140,7 @@ def is_git_repo():
     rc = subprocess.call(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return rc == 0
 
+
 def load_json(filename):
     try:
         with open(filename, 'r') as f:
@@ -142,6 +148,7 @@ def load_json(filename):
     except ValueError as e:
         print('Failed to load data from ' + filename + ': ' + str(e), file=sys.stderr)
         sys.exit(1)
+
 
 def copy_file(file, dest):
     try:
@@ -152,10 +159,12 @@ def copy_file(file, dest):
         else:
             raise
 
+
 def all_templates():
     all_template_dir = os.path.join(BUILDDATADIR, 'templates')
     return sorted([d for d in os.listdir(all_template_dir)
                    if os.path.isdir(os.path.join(all_template_dir, d))])
+
 
 def copy_template(file, projectname, template):
     all_template_dir = os.path.join(BUILDDATADIR, 'templates')
@@ -188,13 +197,16 @@ def move_cmake_files(srcdir, destdir):
         except FileNotFoundError:
             pass
 
+
 def run_command(command):
     print('Running ' + ' '.join(command))
     return subprocess.call(command)
 
+
 def init_git():
     command = ['git', 'init']
     run_command(command)
+
 
 def generate_gitignore(info):
     print('Generating .gitignore')
@@ -253,6 +265,7 @@ def run_cmake(builddir):
     finally:
         move_cmake_files('.', builddir)
 
+
 def run_make(builddir, sudo, args):
     move_cmake_files(builddir, '.')
     try:
@@ -261,6 +274,7 @@ def run_make(builddir, sudo, args):
         run_command(command)
     finally:
         move_cmake_files('.', builddir)
+
 
 def validate(name, data, valid):
     missingRequired = []
@@ -273,7 +287,7 @@ def validate(name, data, valid):
             valueType = list
         required = value[1]
         default = value[2] if len(value) > 2 else None
-        values  = value[3] if len(value) > 3 else None
+        values = value[3] if len(value) > 3 else None
         if key in data:
             val = data[key]
             if isinstance(val, valueType):
@@ -313,10 +327,12 @@ def validate(name, data, valid):
                   'actual: ' + actual)
         sys.exit(1)
 
+
 def validate_info(info):
     validate('build info file', info, VALID_INFO)
     for count, target in enumerate(info['targets']):
         validate('target(' + str(count+1) + ')', target, VALID_TARGETS)
+
 
 def read_info(filename):
     data = {}
@@ -340,15 +356,17 @@ def read_info(filename):
 
     return data
 
+
 def get_sources(pattern):
     if '*' not in pattern:
-        return [ pattern ]
+        return [pattern]
     filedir = os.path.dirname(pattern)
     filename = os.path.basename(pattern)
     command = ['find', filedir, '-name', filename]
-    with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL) as proc:
-        stdout, stderr = proc.communicate()
-        return list(filter(None, stdout.decode('utf-8').split('\n')))
+    proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    stdout, stderr = proc.communicate()
+    return list(filter(None, stdout.decode('utf-8').split('\n')))
+
 
 def check_source_files(data):
     info = data['info']
@@ -371,9 +389,11 @@ def check_source_files(data):
         with open(os.path.join(srcdir, name), 'w') as f:
             print('\n'.join(srcs), file=f)
 
+
 def unique_list(lst):
     seen = set()
     return [elem for elem in lst if not (elem in seen or seen.add(elem))]
+
 
 def generate_cmake(info, filename):
     cmake_data = [
@@ -391,13 +411,13 @@ def generate_cmake(info, filename):
         target_libs = target['libraries']
         all_libraries += target_libs
         libs = base_libraries + target_libs
-        target_libraries[target['name']] = [LIBRARIES[l] for l in libs]
+        target_libraries[target['name']] = [LIBRARIES[lib] for lib in libs]
     lib_data = [LIBRARIES[lib] for lib in unique_list(all_libraries)]
 
     find_packs = sum([lib['find_package'] for lib in lib_data], [])
-    pkg_checks = sum([lib['pkg_check']    for lib in lib_data], [])
-    link_dirs  = sum([lib['link_dirs']    for lib in lib_data], [])
-    
+    pkg_checks = sum([lib['pkg_check'] for lib in lib_data], [])
+    link_dirs = sum([lib['link_dirs'] for lib in lib_data], [])
+
     if find_packs:
         cmake_data.append('')
         for pack in find_packs:
@@ -414,7 +434,6 @@ def generate_cmake(info, filename):
         cmake_data.append('link_directories(' + ' '.join(link_dirs) + ')')
 
     install_libs = []
-    install_srcs = []
 
     install_types = set()
 
@@ -443,7 +462,7 @@ def generate_cmake(info, filename):
             cmake_data.append(
                 'target_include_directories(' + name + ' PRIVATE ' + dirs + ')')
 
-        link_libs    = sum([lib['link_libs']    for lib in libs], [])
+        link_libs = sum([lib['link_libs'] for lib in libs], [])
         if link_libs:
             links = ' '.join(link_libs)
             cmake_data.append('target_link_libraries(' + name + ' ' + links + ')')
@@ -478,7 +497,7 @@ def generate_cmake(info, filename):
         if target['type'] in ('sharedlib', 'staticlib') and target.get('install'):
             install_libs.append(name)
             install_types.add(target['type'])
-            
+
     if install_libs:
         cmake_data.append('install(TARGETS ' + ' '.join(install_libs) +
                           'ARCHIVE DESTINATION lib)')
