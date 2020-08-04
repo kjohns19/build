@@ -2,14 +2,14 @@
 
 import argparse
 import errno
-import glob
 import json
-import os.path
+import os
+import pathlib
 import shutil
 import subprocess
 import sys
 
-BUILDDATADIR = os.path.join(os.path.abspath(os.path.dirname(__file__)), '.builddata')
+BUILDDATADIR = pathlib.Path(__file__).parent.resolve() / '.builddata'
 
 # [type, required, default, values]
 VALID_INFO = {
@@ -45,7 +45,7 @@ LIBRARIES = {}
 
 
 def load_libraries_dir(directory):
-    for libfilename in glob.glob(os.path.join(directory, '*')):
+    for libfilename in directory.iterdir():
         libraries = load_json(libfilename)
         for libname, libdata in libraries.items():
             validate('library ' + libname, libdata, VALID_LIBRARIES)
@@ -53,11 +53,11 @@ def load_libraries_dir(directory):
 
 
 def load_libraries(info):
-    librarydir = os.path.join(BUILDDATADIR, 'libs')
+    librarydir = BUILDDATADIR / 'libs'
     load_libraries_dir(librarydir)
     locallibs = info.get('locallibs')
     if locallibs:
-        load_libraries_dir(locallibs)
+        load_libraries_dir(pathlib.Path(locallibs))
     librarynames = list(LIBRARIES.keys())
     VALID_INFO['libraries'].append(librarynames)
     VALID_TARGETS['libraries'].append(librarynames)
@@ -69,8 +69,8 @@ def main():
         print('Available templates: ' + ', '.join(all_templates()))
         return
     if args.projectname:
-        copy_template(args.file, args.projectname, args.template)
-    data = read_info(args.file)
+        copy_template(args.buildfile, args.projectname, args.template)
+    data = read_info(args.buildfile)
     data['no_cmake'] = args.nocmake
     data['no_make'] = args.nomake
     data['run_cmake'] = False
@@ -81,8 +81,8 @@ def main():
     if not is_git and not args.nogit:
         init_git()
         is_git = True
-    builddir = info['builddir']
-    os.makedirs(builddir, exist_ok=True)
+    builddir = pathlib.Path(info['builddir'])
+    builddir.mkdir(parents=True, exist_ok=True)
     check_source_files(data)
     if data['need_init']:
         generate_cmake(info, 'CMakeLists.txt')
@@ -99,7 +99,8 @@ def parse_args():
     desc = 'Easy to use wrapper script around cmake and make'
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument(
-        '-f', '--file', action='store',
+        '-f', '--buildfile', action='store', type=pathlib.Path,
+        default=pathlib.Path('build.info'),
         help='Use FILE as the build file')
     parser.add_argument(
         '-i', '--init', action='store', dest='projectname',
@@ -127,8 +128,6 @@ def parse_args():
         help='Pass argument to make')
     args = parser.parse_args()
 
-    if args.file is None:
-        args.file = 'build.info'
     if args.projectname and not args.template:
         args.template = 'default'
 
@@ -161,37 +160,34 @@ def copy_file(file, dest):
 
 
 def all_templates():
-    all_template_dir = os.path.join(BUILDDATADIR, 'templates')
-    return sorted([d for d in os.listdir(all_template_dir)
-                   if os.path.isdir(os.path.join(all_template_dir, d))])
+    all_template_dir = BUILDDATADIR / 'templates'
+    return sorted(d.name for d in all_template_dir.iterdir() if d.is_dir())
 
 
-def copy_template(file, projectname, template):
-    all_template_dir = os.path.join(BUILDDATADIR, 'templates')
-    templatedir = os.path.join(all_template_dir, template)
-    if not os.path.isdir(templatedir):
-        print('ERROR: Invalid template \'' + template + '\'. Valid templates: ' +
-              ', '.join(all_templates()), file=sys.stderr)
+def copy_template(buildfile, projectname, template):
+    templatedir = BUILDDATADIR / 'templates' / template
+    if not templatedir.is_dir():
+        all_templates_str = ', '.join(all_templates)
+        print(f'ERROR: Invalid template "{template}". '
+              f'Valid templates: {all_templates_str}', file=sys.stderr)
         sys.exit(1)
-    buildinfo = os.path.join(templatedir, 'build.info')
-    if not os.path.isfile(buildinfo):
-        print('ERROR: Invalid template \'' + template + '\'. Missing build.info',
+    buildinfo = templatedir / 'build.info'
+    if not buildinfo.is_file():
+        print('ERROR: Invalid template "{template}". Missing build.info',
               file=sys.stderr)
         sys.exit(1)
-    with open(buildinfo, 'r') as f:
-        buildinfocontents = f.read()
-    buildinfocontents = buildinfocontents.replace('${project}', projectname)
-    with open(file, 'w') as f:
-        print(buildinfocontents, file=f)
-    for filename in [f for f in os.listdir(templatedir) if f != 'build.info']:
-        src = os.path.join(templatedir, filename)
-        copy_file(src, filename)
+
+    buildinfocontents = buildinfo.read_text()
+    buildfile.write_text(buildinfocontents.replace('${project}', projectname) + '\n')
+
+    for filename in [f for f in templatedir.iterdir() if f.name != 'build.info']:
+        copy_file(filename, filename.name)
 
 
 def move_cmake_files(srcdir, destdir):
     for file in CMAKEFILES:
-        src = os.path.join(srcdir, file)
-        dest = os.path.join(destdir, file)
+        src = srcdir / file
+        dest = destdir / file
         try:
             shutil.move(src, dest)
         except FileNotFoundError:
@@ -247,33 +243,32 @@ def generate_gitignore(info):
     gitignore.append(endline)
 
     extra = []
-    if os.path.isfile('.gitignore'):
-        with open('.gitignore', 'r') as f:
-            extra = f.read().split('\n')
-            if endline in extra:
-                extra = extra[extra.index(endline)+1:-1]
+    gitignorefile = pathlib.Path('.gitignore')
+    if gitignorefile.is_file():
+        extra = gitignorefile.read_text().split('\n')
+        if endline in extra:
+            extra = extra[extra.index(endline)+1:-1]
 
-    with open('.gitignore', 'w') as f:
-        print('\n'.join(gitignore+extra), file=f)
+    gitignorefile.write_text('\n'.join(gitignore + extra) + '\n')
 
 
 def run_cmake(builddir):
-    move_cmake_files(builddir, '.')
+    move_cmake_files(builddir, pathlib.Path.cwd())
     try:
         command = ['cmake', '.']
         run_command(command)
     finally:
-        move_cmake_files('.', builddir)
+        move_cmake_files(pathlib.Path.cwd(), builddir)
 
 
 def run_make(builddir, sudo, args):
-    move_cmake_files(builddir, '.')
+    move_cmake_files(builddir, pathlib.Path.cwd())
     try:
         command = ['sudo'] if sudo else []
         command += ['make'] + args
         run_command(command)
     finally:
-        move_cmake_files('.', builddir)
+        move_cmake_files(pathlib.Path.cwd(), builddir)
 
 
 def validate(name, data, valid):
@@ -336,20 +331,19 @@ def validate_info(info):
 
 def read_info(filename):
     data = {}
-    if os.path.isfile(filename):
+    if filename.is_file():
         data['info'] = load_json(filename)
     else:
-        print('ERROR: build info file \'' + filename + '\' does not exist. ' +
-              'Run \'build --help\' for help',
-              file=sys.stderr)
+        print(f'ERROR: build info file "{filename}" does not exist. '
+              'Run "build --help" for help', file=sys.stderr)
         sys.exit(1)
 
     build_dir = data['info'].get('builddir')
     if build_dir:
-        cmakefile = 'CMakeLists.txt'
-        if os.path.isfile(cmakefile):
-            info_ts = os.path.getmtime(filename)
-            cmake_ts = os.path.getmtime(cmakefile)
+        cmakefile = pathlib.Path('CMakeLists.txt')
+        if cmakefile.is_file():
+            info_ts = filename.stat().st_mtime
+            cmake_ts = cmakefile.stat().st_mtime
             data['need_init'] = (info_ts > cmake_ts)
         else:
             data['need_init'] = True
@@ -360,9 +354,10 @@ def read_info(filename):
 def get_sources(pattern):
     if '*' not in pattern:
         return [pattern]
-    filedir = os.path.dirname(pattern)
-    filename = os.path.basename(pattern)
-    command = ['find', filedir, '-name', filename]
+    pattern = pathlib.Path(pattern)
+    filedir = pattern.parent
+    filename = pattern.name
+    command = ['find', str(filedir), '-name', filename]
     proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     stdout, stderr = proc.communicate()
     return list(filter(None, stdout.decode('utf-8').split('\n')))
@@ -370,14 +365,14 @@ def get_sources(pattern):
 
 def check_source_files(data):
     info = data['info']
-    srcdir = os.path.join(info['builddir'], 'srcs')
-    os.makedirs(srcdir, exist_ok=True)
+    srcdir = pathlib.Path(info['builddir']) / 'srcs'
+    srcdir.mkdir(parents=True, exist_ok=True)
     all_srcs = {}
-    for srcfile in glob.glob(os.path.join(srcdir, '*')):
-        with open(srcfile, 'r') as f:
-            target = os.path.basename(srcfile)
-            all_srcs[target] = list(filter(None, f.read().split('\n')))
-            os.remove(srcfile)
+    for srcfile in srcdir.iterdir():
+        all_srcs[srcfile.name] = [
+            line for line in srcfile.read_text().split('\n') if line
+        ]
+        os.remove(srcfile)
     for target in info['targets']:
         name = target['name']
         srcs = [src for srcs in target['srcs'] for src in get_sources(srcs)]
@@ -386,8 +381,7 @@ def check_source_files(data):
             data['no_make'] = True
         if name not in all_srcs or all_srcs[name] != srcs:
             data['run_cmake'] = True
-        with open(os.path.join(srcdir, name), 'w') as f:
-            print('\n'.join(srcs), file=f)
+        (srcdir / name).write_text('\n'.join(srcs) + '\n')
 
 
 def unique_list(lst):
@@ -487,11 +481,10 @@ def generate_cmake(info, filename):
 
         for include in target['install_includes']:
             if '*' in include:
-                srcdir = os.path.dirname(include)
-                if srcdir[-1] != '/':
-                    srcdir += '/'
-                pattern = os.path.basename(include)
-                include_patterns.append([srcdir, pattern])
+                include_path = pathlib.Path(include)
+                srcdir = include_path.parent
+                pattern = include_path.name
+                include_patterns.append([str(srcdir), pattern])
             else:
                 include_files.append(include)
         if target['type'] in ('sharedlib', 'staticlib') and target.get('install'):
@@ -506,7 +499,7 @@ def generate_cmake(info, filename):
         files = ' '.join(include_files)
         cmake_data.append('install(FILES ' + files + ' DESTINATION include)')
     for include_pattern in include_patterns:
-        srcdir = include_pattern[0]
+        srcdir = include_pattern[0] + '/'
         pattern = include_pattern[1]
         cmake_data.append('install(DIRECTORY ' + srcdir +
                           ' DESTINATION include FILES_MATCHING PATTERN "' +
@@ -515,12 +508,13 @@ def generate_cmake(info, filename):
     for copy in info['copy']:
         cmake_data.append(copy)
 
-    move_cmake_files('.', info['builddir'])
+    builddir = pathlib.Path(info['builddir'])
+    move_cmake_files(pathlib.Path.cwd(), builddir)
     try:
         with open(filename, 'w') as f:
             print('\n'.join(cmake_data), file=f)
     finally:
-        move_cmake_files(info['builddir'], '.')
+        move_cmake_files(builddir, pathlib.Path.cwd())
 
 
 if __name__ == '__main__':
