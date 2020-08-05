@@ -31,7 +31,7 @@ SCHEMA_BUILD_INFO = {
                     'name': TYPE_STRING,
                     'type': {
                         'type': 'string',
-                        'pattern': 'executable|sharedlib|staticlib'
+                        'pattern': '^(executable|sharedlib|staticlib)$'
                     },
                     'srcs': TYPE_STRING_ARRAY,
                     'flags': TYPE_STRING,
