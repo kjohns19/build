@@ -175,10 +175,10 @@ def load_json(filename):
 
 def copy_file(file, dest):
     try:
-        shutil.copytree(file, dest)
+        shutil.copytree(str(file), str(dest))
     except OSError as e:
         if e.errno == errno.ENOTDIR:
-            shutil.copy(file, dest)
+            shutil.copy(str(file), str(dest))
         else:
             raise
 
@@ -215,7 +215,7 @@ def move_cmake_files(srcdir, destdir):
             src = srcdir / file
             dest = destdir / file
             try:
-                shutil.move(src, dest)
+                shutil.move(str(src), str(dest))
             except FileNotFoundError:
                 pass
 
