@@ -4,6 +4,7 @@ import argparse
 import contextlib
 import errno
 import json
+import jsonschema
 import os
 import pathlib
 import shlex
@@ -13,32 +14,52 @@ import sys
 
 BUILDDATADIR = pathlib.Path(__file__).parent.resolve() / '.builddata'
 
-# [type, required, default, values]
-VALID_INFO = {
-    'projectname': [str, True],
-    'builddir': [str, True],
-    'flags': [str, False, ''],
-    'libraries': [[str], False, []],
-    'targets': [[dict], True],
-    'include_dirs': [[str], False, []],
-    'copy': [[str], False, []],
+TYPE_STRING = {'type': 'string'}
+TYPE_STRING_ARRAY = {'type': 'array', 'items': TYPE_STRING}
+
+SCHEMA_BUILD_INFO = {
+    'type': 'object',
+    'properties': {
+        'projectname': TYPE_STRING,
+        'builddir': TYPE_STRING,
+        'flags': TYPE_STRING,
+        'targets': {
+            'type': 'array',
+            'items': {
+                'type': 'object',
+                'properties': {
+                    'name': TYPE_STRING,
+                    'type': {
+                        'type': 'string',
+                        'pattern': 'executable|sharedlib|staticlib'
+                    },
+                    'srcs': TYPE_STRING_ARRAY,
+                    'flags': TYPE_STRING,
+                    'libraries': TYPE_STRING_ARRAY,
+                    'include_dirs': TYPE_STRING_ARRAY,
+                    'install_to': TYPE_STRING_ARRAY,
+                    'install_includes': TYPE_STRING_ARRAY
+                },
+                'additionalProperties': False,
+                'required': ['name', 'srcs']
+            }
+        }
+    },
+    'additionalProperties': False,
+    'required': ['projectname', 'builddir', 'targets']
 }
-VALID_TARGETS = {
-    'name': [str, True],
-    'type': [str, False, 'executable', ['executable', 'sharedlib', 'staticlib']],
-    'srcs': [[str], True],
-    'flags': [str, False, ''],
-    'libraries': [[str], False, []],
-    'include_dirs': [[str], False, []],
-    'install_to': [[str], False, []],
-    'install_includes': [[str], False, []],
-}
-VALID_LIBRARIES = {
-    'find_package': [[str], False, []],
-    'pkg_check':    [[str], False, []],
-    'include_dirs': [[str], False, []],
-    'link_dirs':    [[str], False, []],
-    'link_libs':    [[str], True],
+
+SCHEMA_LIBRARY = {
+    'type': 'object',
+    'properties': {
+        'find_package': TYPE_STRING_ARRAY,
+        'pkg_check': TYPE_STRING_ARRAY,
+        'include_dirs': TYPE_STRING_ARRAY,
+        'link_dirs': TYPE_STRING_ARRAY,
+        'link_libs': TYPE_STRING_ARRAY
+    },
+    'additionalProperties': False,
+    'required': ['link_libs']
 }
 
 CMAKEFILES = ['CMakeCache.txt', 'CMakeFiles', 'cmake_install.cmake', 'Makefile']
@@ -50,7 +71,11 @@ def load_libraries_dir(directory):
     for libfilename in directory.iterdir():
         libraries = load_json(libfilename)
         for libname, libdata in libraries.items():
-            validate('library ' + libname, libdata, VALID_LIBRARIES)
+            try:
+                jsonschema.validate(libdata, SCHEMA_LIBRARY)
+            except Exception as e:
+                print(f'Invalid library {libdata}: {e}')
+                raise
             LIBRARIES[libname] = libdata
 
 
@@ -60,9 +85,6 @@ def load_libraries(info):
     locallibs = info.get('locallibs')
     if locallibs:
         load_libraries_dir(pathlib.Path(locallibs))
-    librarynames = list(LIBRARIES.keys())
-    VALID_INFO['libraries'].append(librarynames)
-    VALID_TARGETS['libraries'].append(librarynames)
 
 
 def main():
@@ -237,7 +259,7 @@ def generate_gitignore(info):
     for target in info['targets']:
         if target['type'] == 'executable':
             executables.append(target['name'])
-        if target['install_to']:
+        if target.get('install_to'):
             has_install = True
     if has_install:
         gitignore.append('')
@@ -275,60 +297,12 @@ def run_make(builddir, sudo, args):
         run_command(command)
 
 
-def validate(name, data, valid):
-    missingRequired = []
-    invalidTypes = []
-    invalidValues = []
-    for key, value in valid.items():
-        valueType = value[0]
-        if type(valueType) is list:
-            listType = valueType[0]
-            valueType = list
-        required = value[1]
-        default = value[2] if len(value) > 2 else None
-        values = value[3] if len(value) > 3 else None
-        if key in data:
-            val = data[key]
-            if isinstance(val, valueType):
-                if valueType is list:
-                    for elem in val:
-                        if not isinstance(elem, listType):
-                            invalidTypes.append([key, [listType], type(elem)])
-                if values is not None:
-                    if isinstance(val, list):
-                        vals = val
-                    else:
-                        vals = [val]
-                    for val in vals:
-                        if val not in values:
-                            invalidValues.append([key, values, val])
-            else:
-                invalidTypes.append([key, valueType, type(val)])
-        elif required:
-            missingRequired.append(key)
-        else:
-            data[key] = default
-    if missingRequired or invalidTypes or invalidValues:
-        print(f'ERROR: Invalid {name}:')
-        if missingRequired:
-            print(f'    Missing required values: {", ".join(missingRequired)}')
-        for key, expected, actual in invalidTypes:
-            liststr = ''
-            if isinstance(expected, list):
-                liststr = ' list'
-                expected = expected[0]
-            print(f'    Invalid type for "{key}"{liststr}: '
-                  f'expected: {expected}, actual: {actual}')
-        for key, expected, actual in invalidValues:
-            print(f'    Invalid value for "{key}": '
-                  f'expected one of [{", ".join(expected)}], actual: {actual}')
-        sys.exit(1)
-
-
 def validate_info(info):
-    validate('build info file', info, VALID_INFO)
-    for count, target in enumerate(info['targets'], 1):
-        validate(f'target({count})', target, VALID_TARGETS)
+    try:
+        jsonschema.validate(info, SCHEMA_BUILD_INFO)
+    except Exception as e:
+        print(f'Invalid build info: {e}')
+        raise
 
 
 def read_info(filename):
@@ -400,19 +374,19 @@ def generate_cmake(info, filename):
 
     print('Generating CMakeLists.txt')
 
-    base_libraries = info['libraries']
+    base_libraries = info.get('libraries', [])
     all_libraries = base_libraries.copy()
     target_libraries = {}
     for target in info['targets']:
-        target_libs = target['libraries']
+        target_libs = target.get('libraries', [])
         all_libraries += target_libs
         libs = base_libraries + target_libs
         target_libraries[target['name']] = [LIBRARIES[lib] for lib in libs]
     lib_data = [LIBRARIES[lib] for lib in unique_list(all_libraries)]
 
-    find_packs = sum([lib['find_package'] for lib in lib_data], [])
-    pkg_checks = sum([lib['pkg_check'] for lib in lib_data], [])
-    link_dirs = sum([lib['link_dirs'] for lib in lib_data], [])
+    find_packs = sum([lib.get('find_package', []) for lib in lib_data], [])
+    pkg_checks = sum([lib.get('pkg_check', []) for lib in lib_data], [])
+    link_dirs = sum([lib.get('link_dirs', []) for lib in lib_data], [])
 
     if find_packs:
         cmake_data.append('')
@@ -446,13 +420,13 @@ def generate_cmake(info, filename):
             'staticlib': f'add_library({name} STATIC ${{{files_var}}})'
         }
         cmake_data.append(type_dict[target['type']])
-        flags = ' '.join((info['flags'], target['flags'])).strip()
+        flags = ' '.join((info.get('flags', ''), target.get('flags', ''))).strip()
         if flags:
             options = f'{name} PRIVATE {flags}'
             cmake_data.append(f'target_compile_options({options})')
 
-        include_dirs = sum([lib['include_dirs'] for lib in libs], [])
-        include_dirs += info['include_dirs'] + target['include_dirs']
+        include_dirs = sum([lib.get('include_dirs', []) for lib in libs], [])
+        include_dirs += info.get('include_dirs', []) + target.get('include_dirs', [])
         if include_dirs:
             dirs = ' '.join(include_dirs)
             cmake_data.append(
@@ -477,11 +451,11 @@ def generate_cmake(info, filename):
     for target in info['targets']:
         name = target['name']
         install_type = install_types[target['type']]
-        for dest in target['install_to']:
+        for dest in target.get('install_to', []):
             cmake_data.append(
                 f'install(TARGETS {name} {install_type} DESTINATION {dest})')
 
-        for include in target['install_includes']:
+        for include in target.get('install_includes', []):
             if '*' in include:
                 include_path = pathlib.Path(include)
                 srcdir = include_path.parent
@@ -506,7 +480,7 @@ def generate_cmake(info, filename):
         cmake_data.append(f'install(DIRECTORY {srcdir} DESTINATION '
                           f'include FILES_MATCHING PATTERN "{pattern}")')
 
-    for copy in info['copy']:
+    for copy in info.get('copy', []):
         cmake_data.append(copy)
 
     builddir = pathlib.Path(info['builddir'])
