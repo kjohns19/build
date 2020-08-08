@@ -17,7 +17,7 @@ from build_dir import library
 from build_dir import util
 
 
-BUILDDATADIR = pathlib.Path(__file__).parent.resolve() / '.builddata'
+BUILDDATADIR = pathlib.Path(__file__).parent.resolve() / 'build_data'
 
 CMAKEFILES = ['CMakeCache.txt', 'CMakeFiles', 'cmake_install.cmake', 'Makefile']
 
