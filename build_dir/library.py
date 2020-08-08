@@ -1,6 +1,6 @@
 import dataclasses
 import pathlib
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from . import util
 
@@ -33,6 +33,16 @@ class Library:
     include_dirs: List[pathlib.Path]
     link_dirs: List[pathlib.Path]
     link_libs: List[str]
+
+
+def load_all(directory: pathlib.Path) -> Dict[str, Library]:
+    libraries = {}
+
+    for libfilename in directory.iterdir():
+        for lib in load(libfilename):
+            libraries[lib.name] = lib
+
+    return libraries
 
 
 def load(path: pathlib.Path) -> List[Library]:

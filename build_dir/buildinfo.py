@@ -17,7 +17,6 @@ INFO_SCHEMA = {
         'flags': TYPE_STRING,
         'libraries': TYPE_STRING_ARRAY,
         'include_dirs': TYPE_STRING_ARRAY,
-        'locallibs': TYPE_STRING,
         'copy': TYPE_STRING_ARRAY,
         'targets': {
             'type': 'array',
@@ -71,7 +70,6 @@ class Info:
     flags: str
     libraries: List[str]
     include_dirs: List[pathlib.Path]
-    locallibs: Optional[pathlib.Path]
     copy: List[str]
     targets: List[Target]
 
@@ -94,7 +92,6 @@ def load(path: pathlib.Path) -> Info:
         flags=data.get('flags', ''),
         libraries=data.get('libraries', []),
         include_dirs=paths_array(data.get('include_dirs')),
-        locallibs=pathlib.Path(data['locallibs']) if 'locallibs' in data else None,
         copy=data.get('copy', []),
         targets=[
             Target(

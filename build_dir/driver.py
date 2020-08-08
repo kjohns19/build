@@ -38,7 +38,7 @@ def main(argv: List[str]):
         copy_template(args.buildfile, args.projectname, args.template)
 
     data = read_info(args.buildfile, args.run_cmake, args.run_make)
-    libraries = load_libraries(data.info)
+    libraries = library.load_all(BUILDDATADIR / 'libs')
 
     is_git = is_git_repo()
     if not is_git and args.make_git:
@@ -94,21 +94,6 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         help='Pass argument to make')
 
     return parser.parse_args(argv)
-
-
-def load_libraries(info: buildinfo.Info) -> Dict[str, library.Library]:
-    libraries = {}
-
-    def load_libraries_dir(directory: pathlib.Path):
-        for libfilename in directory.iterdir():
-            for lib in library.load(libfilename):
-                libraries[lib.name] = lib
-
-    load_libraries_dir(BUILDDATADIR / 'libs')
-    if info.locallibs:
-        load_libraries_dir(info.locallibs)
-
-    return libraries
 
 
 def is_git_repo() -> bool:
