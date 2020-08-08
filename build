@@ -2,6 +2,7 @@
 
 import argparse
 import contextlib
+import dataclasses
 import errno
 import os
 import pathlib
@@ -9,7 +10,7 @@ import shlex
 import shutil
 import subprocess
 import sys
-from typing import Any, Dict, List
+from typing import Dict, List
 
 from build_dir import buildinfo
 from build_dir import library
@@ -21,6 +22,15 @@ BUILDDATADIR = pathlib.Path(__file__).parent.resolve() / '.builddata'
 CMAKEFILES = ['CMakeCache.txt', 'CMakeFiles', 'cmake_install.cmake', 'Makefile']
 
 
+@dataclasses.dataclass
+class BuildData:
+    info: buildinfo.Info
+    run_cmake: bool
+    run_make: bool
+    need_cmake: bool
+    need_init: bool
+
+
 def main():
     args = parse_args()
     if args.listtemplates:
@@ -28,27 +38,29 @@ def main():
         return
     if args.projectname:
         copy_template(args.buildfile, args.projectname, args.template)
-    data = read_info(args.buildfile)
-    data['no_cmake'] = args.nocmake
-    data['no_make'] = args.nomake
-    data['run_cmake'] = False
-    info = data['info']
-    libraries = load_libraries(info)
+
+    data = read_info(args.buildfile, args.run_cmake, args.run_make)
+    libraries = load_libraries(data.info)
+
     is_git = is_git_repo()
-    if not is_git and not args.nogit:
+    if not is_git and args.make_git:
         init_git()
         is_git = True
-    info.builddir.mkdir(parents=True, exist_ok=True)
+
+    data.info.builddir.mkdir(parents=True, exist_ok=True)
     check_source_files(data)
-    if data['need_init']:
-        generate_cmake(info, libraries, 'CMakeLists.txt')
+
+    if data.need_init:
+        generate_cmake(data.info, libraries, 'CMakeLists.txt')
         if is_git:
-            generate_gitignore(info)
-        data['run_cmake'] = True
-    if data['run_cmake'] and not data['no_cmake']:
-        run_cmake(info.builddir)
-    if not data['no_make']:
-        run_make(info.builddir, args.sudo, args.make_args)
+            generate_gitignore(data.info)
+        data.need_cmake = True
+
+    if data.need_cmake and data.run_cmake:
+        run_cmake(data.info.builddir)
+
+    if data.run_make:
+        run_make(data.info.builddir, args.sudo, args.make_args)
 
 
 def parse_args() -> argparse.Namespace:
@@ -68,13 +80,13 @@ def parse_args() -> argparse.Namespace:
         '-T', '--listtemplates', action='store_true',
         help='List all available templates')
     parser.add_argument(
-        '-c', '--nocmake', action='store_true',
+        '-c', '--nocmake', dest='run_cmake', action='store_false',
         help='Don\'t run cmake')
     parser.add_argument(
-        '-m', '--nomake', action='store_true',
+        '-m', '--nomake', dest='run_make', action='store_false',
         help='Don\'t run make')
     parser.add_argument(
-        '-g', '--nogit', action='store_true',
+        '-g', '--nogit', dest='make_git', action='store_false',
         help='Don\'t create a git repository (with -i/--init)')
     parser.add_argument(
         '-s', '--sudo', action='store_true',
@@ -251,26 +263,28 @@ def run_make(builddir: pathlib.Path, sudo: bool, args: List[str]):
         run_command(command)
 
 
-def read_info(filename: pathlib.Path) -> dict:
-    data: Dict[Any, Any] = {}
-    if filename.is_file():
-        data['info'] = buildinfo.load(filename)
-    else:
+def read_info(filename: pathlib.Path, run_cmake: bool, run_make: bool) -> BuildData:
+    if not filename.is_file():
         print(f'ERROR: build info file "{filename}" does not exist. '
               'Run "build --help" for help', file=sys.stderr)
         sys.exit(1)
 
-    build_dir = data['info'].builddir
-    if build_dir:
+    info = buildinfo.load(filename)
+
+    if info.builddir:
         cmakefile = pathlib.Path('CMakeLists.txt')
         if cmakefile.is_file():
-            info_ts = filename.stat().st_mtime
-            cmake_ts = cmakefile.stat().st_mtime
-            data['need_init'] = (info_ts > cmake_ts)
+            need_init = (filename.stat().st_mtime > cmakefile.stat().st_mtime)
         else:
-            data['need_init'] = True
+            need_init = True
 
-    return data
+    return BuildData(
+        info=info,
+        run_cmake=run_cmake,
+        run_make=run_make,
+        need_cmake=False,
+        need_init=need_init
+    )
 
 
 def get_sources(pattern: pathlib.Path):
@@ -284,9 +298,8 @@ def get_sources(pattern: pathlib.Path):
     return list(filter(None, stdout.decode('utf-8').split('\n')))
 
 
-def check_source_files(data: dict):
-    info = data['info']
-    srcdir = pathlib.Path(info.builddir) / 'srcs'
+def check_source_files(data: BuildData):
+    srcdir = pathlib.Path(data.info.builddir) / 'srcs'
     srcdir.mkdir(parents=True, exist_ok=True)
     all_srcs = {}
     for srcfile in srcdir.iterdir():
@@ -294,13 +307,13 @@ def check_source_files(data: dict):
             line for line in srcfile.read_text().split('\n') if line
         ]
         os.remove(srcfile)
-    for target in info.targets:
+    for target in data.info.targets:
         srcs = [src for srcs in target.srcs for src in get_sources(srcs)]
         if not srcs:
-            data['no_cmake'] = True
-            data['no_make'] = True
+            data.run_cmake = False
+            data.run_make = False
         if target.name not in all_srcs or all_srcs[target.name] != srcs:
-            data['run_cmake'] = True
+            data.need_cmake = True
         (srcdir / target.name).write_text('\n'.join(srcs) + '\n')
 
 
