@@ -20,22 +20,6 @@ BUILDDATADIR = pathlib.Path(__file__).parent.resolve() / '.builddata'
 
 CMAKEFILES = ['CMakeCache.txt', 'CMakeFiles', 'cmake_install.cmake', 'Makefile']
 
-LIBRARIES = {}
-
-
-def load_libraries_dir(directory: pathlib.Path):
-    for libfilename in directory.iterdir():
-        libraries = library.load(libfilename)
-        for lib in libraries:
-            LIBRARIES[lib.name] = lib
-
-
-def load_libraries(info: buildinfo.Info):
-    librarydir = BUILDDATADIR / 'libs'
-    load_libraries_dir(librarydir)
-    if info.locallibs:
-        load_libraries_dir(info.locallibs)
-
 
 def main():
     args = parse_args()
@@ -49,7 +33,7 @@ def main():
     data['no_make'] = args.nomake
     data['run_cmake'] = False
     info = data['info']
-    load_libraries(info)
+    libraries = load_libraries(info)
     is_git = is_git_repo()
     if not is_git and not args.nogit:
         init_git()
@@ -57,7 +41,7 @@ def main():
     info.builddir.mkdir(parents=True, exist_ok=True)
     check_source_files(data)
     if data['need_init']:
-        generate_cmake(info, 'CMakeLists.txt')
+        generate_cmake(info, libraries, 'CMakeLists.txt')
         if is_git:
             generate_gitignore(info)
         data['run_cmake'] = True
@@ -104,6 +88,21 @@ def parse_args() -> argparse.Namespace:
         args.template = 'default'
 
     return args
+
+
+def load_libraries(info: buildinfo.Info) -> Dict[str, library.Library]:
+    libraries = {}
+
+    def load_libraries_dir(directory: pathlib.Path):
+        for libfilename in directory.iterdir():
+            for lib in library.load(libfilename):
+                libraries[lib.name] = lib
+
+    load_libraries_dir(BUILDDATADIR / 'libs')
+    if info.locallibs:
+        load_libraries_dir(info.locallibs)
+
+    return libraries
 
 
 def is_git_repo() -> bool:
@@ -305,7 +304,8 @@ def check_source_files(data: dict):
         (srcdir / target.name).write_text('\n'.join(srcs) + '\n')
 
 
-def generate_cmake(info: buildinfo.Info, filename: pathlib.Path):
+def generate_cmake(info: buildinfo.Info, libraries: Dict[str, library.Library],
+                   filename: pathlib.Path):
     cmake_data = [
         'cmake_minimum_required(VERSION 2.8 FATAL_ERROR)',
         '',
@@ -320,8 +320,8 @@ def generate_cmake(info: buildinfo.Info, filename: pathlib.Path):
     for target in info.targets:
         all_libraries += target.libraries
         libs = base_libraries + target.libraries
-        target_libraries[target.name] = [LIBRARIES[lib] for lib in libs]
-    lib_data = [LIBRARIES[lib] for lib in util.unique_list(all_libraries)]
+        target_libraries[target.name] = [libraries[lib] for lib in libs]
+    lib_data = [libraries[lib] for lib in util.unique_list(all_libraries)]
 
     find_packs = [find for lib in lib_data for find in lib.find_package]
     pkg_checks = [check for lib in lib_data for check in lib.pkg_check]
