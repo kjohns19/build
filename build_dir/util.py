@@ -1,4 +1,4 @@
-import jsonschema
+import jsonschema  # type: ignore
 import json
 import pathlib
 from typing import Any, Dict, List
