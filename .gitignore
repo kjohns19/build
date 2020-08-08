@@ -5,6 +5,6 @@
 # Object files
 *.o
 
-# Libraries
-*.a
-*.so
+# Python files
+*.pyc
+__pycache__
