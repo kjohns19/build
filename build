@@ -1,9 +1,11 @@
 #!/usr/bin/env python3.8
 
+import sys
+
 from build_dir import driver
 
 if __name__ == '__main__':
     try:
-        driver.main()
+        driver.main(sys.argv[1:])
     except KeyboardInterrupt:
         print('build: Interrupt')

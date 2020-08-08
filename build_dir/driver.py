@@ -29,8 +29,8 @@ class BuildData:
     need_init: bool
 
 
-def main():
-    args = parse_args()
+def main(argv: List[str]):
+    args = parse_args(argv)
     if args.listtemplates:
         print('Available templates: {", ".join(all_templates())}')
         return
@@ -61,7 +61,7 @@ def main():
         run_make(data.info.builddir, args.sudo, args.make_args)
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: List[str]) -> argparse.Namespace:
     desc = 'Easy to use wrapper script around cmake and make'
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument(
@@ -72,7 +72,7 @@ def parse_args() -> argparse.Namespace:
         '-i', '--init', action='store', dest='projectname',
         help='Initialize a new project build. This generates a new build.info file.')
     parser.add_argument(
-        '-t', '--template', action='store',
+        '-t', '--template', action='store', default='default',
         help='With -i/--init, use a template for initialization')
     parser.add_argument(
         '-T', '--listtemplates', action='store_true',
@@ -92,12 +92,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         'make_args', action='store', nargs='*',
         help='Pass argument to make')
-    args = parser.parse_args()
 
-    if args.projectname and not args.template:
-        args.template = 'default'
-
-    return args
+    return parser.parse_args(argv)
 
 
 def load_libraries(info: buildinfo.Info) -> Dict[str, library.Library]:
