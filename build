@@ -12,29 +12,11 @@ import sys
 from typing import Any, Dict, List
 
 from build_dir import buildinfo
+from build_dir import library
 from build_dir import util
 
 
 BUILDDATADIR = pathlib.Path(__file__).parent.resolve() / '.builddata'
-
-TYPE_STRING = {'type': 'string'}
-TYPE_STRING_ARRAY = {'type': 'array', 'items': TYPE_STRING}
-
-SCHEMA_LIBRARY = {
-    'type': 'object',
-    'additionalProperties': {
-        'type': 'object',
-        'properties': {
-            'find_package': TYPE_STRING_ARRAY,
-            'pkg_check': TYPE_STRING_ARRAY,
-            'include_dirs': TYPE_STRING_ARRAY,
-            'link_dirs': TYPE_STRING_ARRAY,
-            'link_libs': TYPE_STRING_ARRAY
-        },
-        'additionalProperties': False,
-        'required': ['link_libs']
-    }
-}
 
 CMAKEFILES = ['CMakeCache.txt', 'CMakeFiles', 'cmake_install.cmake', 'Makefile']
 
@@ -43,9 +25,9 @@ LIBRARIES = {}
 
 def load_libraries_dir(directory: pathlib.Path):
     for libfilename in directory.iterdir():
-        libraries = util.load_json(libfilename, SCHEMA_LIBRARY)
-        for libname, libdata in libraries.items():
-            LIBRARIES[libname] = libdata
+        libraries = library.load(libfilename)
+        for lib in libraries:
+            LIBRARIES[lib.name] = lib
 
 
 def load_libraries(info: buildinfo.Info):
@@ -325,9 +307,9 @@ def generate_cmake(info: buildinfo.Info, filename: pathlib.Path):
         target_libraries[target.name] = [LIBRARIES[lib] for lib in libs]
     lib_data = [LIBRARIES[lib] for lib in util.unique_list(all_libraries)]
 
-    find_packs = [find for lib in lib_data for find in lib.get('find_package', [])]
-    pkg_checks = [check for lib in lib_data for check in lib.get('pkg_check', [])]
-    link_dirs = [dir for lib in lib_data for dir in lib.get('link_dirs', [])]
+    find_packs = [find for lib in lib_data for find in lib.find_package]
+    pkg_checks = [check for lib in lib_data for check in lib.pkg_check]
+    link_dirs = [dir for lib in lib_data for dir in lib.link_dirs]
 
     if find_packs:
         cmake_data.append('')
@@ -342,7 +324,8 @@ def generate_cmake(info: buildinfo.Info, filename: pathlib.Path):
             cmake_data.append(f'pkg_check_modules({pkg_check})')
 
     if link_dirs:
-        cmake_data.append(f'link_directories({" ".join(link_dirs)})')
+        link_dirs_str = ' '.join(str(link_dir) for link_dir in link_dirs)
+        cmake_data.append(f'link_directories({link_dirs_str})')
 
     for target in info.targets:
         cmake_data.append('')
@@ -366,14 +349,14 @@ def generate_cmake(info: buildinfo.Info, filename: pathlib.Path):
 
         target_libs = target_libraries[target.name]
 
-        include_dirs = [dir for lib in target_libs for dir in lib.get('include_dirs', [])]
+        include_dirs = [dir for lib in target_libs for dir in lib.include_dirs]
         include_dirs += info.include_dirs + target.include_dirs
         if include_dirs:
             dirs = ' '.join(str(include_dir) for include_dir in include_dirs)
             cmake_data.append(
                 f'target_include_directories({target.name} PRIVATE {dirs})')
 
-        link_libs = [link_lib for lib in target_libs for link_lib in lib['link_libs']]
+        link_libs = [link_lib for lib in target_libs for link_lib in lib.link_libs]
         if link_libs:
             links = ' '.join(link_libs)
             cmake_data.append(f'target_link_libraries({target.name} {links})')
