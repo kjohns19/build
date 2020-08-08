@@ -10,7 +10,7 @@ import shlex
 import shutil
 import subprocess
 import sys
-from typing import Dict, List
+from typing import Dict, Iterable, List
 
 from build_dir import buildinfo
 from build_dir import library
@@ -51,7 +51,7 @@ def main():
     check_source_files(data)
 
     if data.need_init:
-        generate_cmake(data.info, libraries, 'CMakeLists.txt')
+        generate_cmake(data.info, libraries, pathlib.Path('CMakeLists.txt'))
         if is_git:
             generate_gitignore(data.info)
         data.need_cmake = True
@@ -287,26 +287,33 @@ def read_info(filename: pathlib.Path, run_cmake: bool, run_make: bool) -> BuildD
     )
 
 
-def get_sources(pattern: pathlib.Path):
-    if '*' not in str(pattern):
-        return [pattern]
-    filedir = pattern.parent
-    filename = pattern.name
-    command = ['find', str(filedir), '-name', filename]
-    proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-    stdout, stderr = proc.communicate()
-    return list(filter(None, stdout.decode('utf-8').split('\n')))
+def get_sources(pattern_path: pathlib.Path) -> Iterable[pathlib.Path]:
+    parts = pattern_path.parts
+
+    # Get the index of the first part of the path containing a pattern
+    # e.g. /a/b/*.c -> [/, a, b, *.c] -> index 3
+    first_pattern_idx = next((i for i, part in enumerate(parts) if '*' in part), None)
+    if first_pattern_idx is None:
+        return [pattern_path]
+
+    # Insert ** into the pattern to recurse into subdirectories
+    parent = pathlib.Path(*parts[:first_pattern_idx])
+    pattern = pathlib.Path('**', *parts[first_pattern_idx:])
+    return parent.glob(str(pattern))
 
 
 def check_source_files(data: BuildData):
+    # Get the source files for the targets from the previous run
     srcdir = pathlib.Path(data.info.builddir) / 'srcs'
     srcdir.mkdir(parents=True, exist_ok=True)
     all_srcs = {}
     for srcfile in srcdir.iterdir():
         all_srcs[srcfile.name] = [
-            line for line in srcfile.read_text().split('\n') if line
+            pathlib.Path(line) for line in srcfile.read_text().split('\n') if line
         ]
         os.remove(srcfile)
+
+    # Get the source files for the targets now. If they differ, we need to rerun cmake
     for target in data.info.targets:
         srcs = [src for srcs in target.srcs for src in get_sources(srcs)]
         if not srcs:
@@ -314,7 +321,9 @@ def check_source_files(data: BuildData):
             data.run_make = False
         if target.name not in all_srcs or all_srcs[target.name] != srcs:
             data.need_cmake = True
-        (srcdir / target.name).write_text('\n'.join(srcs) + '\n')
+
+        # Store the files for the next run
+        (srcdir / target.name).write_text('\n'.join(str(src) for src in srcs) + '\n')
 
 
 def generate_cmake(info: buildinfo.Info, libraries: Dict[str, library.Library],
@@ -360,8 +369,7 @@ def generate_cmake(info: buildinfo.Info, libraries: Dict[str, library.Library],
         cmake_data.append('')
         files_var = f'SRC_FILES_{target.name}'
         srcs_str = ' '.join(str(path) for path in target.srcs)
-        cmake_data.append(
-            f'file(GLOB_RECURSE {files_var} {srcs_str})')
+        cmake_data.append(f'file(GLOB_RECURSE {files_var} {srcs_str})')
         type_dict = {
             buildinfo.TargetType.EXECUTABLE:
                 f'add_executable({target.name} ${{{files_var}}})',
@@ -424,8 +432,7 @@ def generate_cmake(info: buildinfo.Info, libraries: Dict[str, library.Library],
         cmake_data.append(copy)
 
     with move_cmake_files(pathlib.Path.cwd(), info.builddir):
-        with open(filename, 'w') as f:
-            print('\n'.join(cmake_data), file=f)
+        filename.write_text('\n'.join(cmake_data) + '\n')
 
 
 if __name__ == '__main__':
