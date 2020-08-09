@@ -1,8 +1,9 @@
 import dataclasses
 import enum
 import pathlib
-from typing import List, Optional
+from typing import Dict, List, Optional
 
+from . import library
 from . import util
 
 
@@ -57,7 +58,7 @@ class Target:
     type: TargetType
     srcs: List[pathlib.Path]
     flags: str
-    libraries: List[str]
+    libraries: List[library.Library]
     include_dirs: List[pathlib.Path]
     install_to: List[pathlib.Path]
     install_includes: List[pathlib.Path]
@@ -67,14 +68,11 @@ class Target:
 class Info:
     projectname: str
     builddir: pathlib.Path
-    flags: str
-    libraries: List[str]
-    include_dirs: List[pathlib.Path]
     copy: List[str]
     targets: List[Target]
 
 
-def load(path: pathlib.Path) -> Info:
+def load(path: pathlib.Path, libraries: Dict[str, library.Library]) -> Info:
     def paths_array(value: Optional[List[str]]) -> List[pathlib.Path]:
         if value is None:
             return []
@@ -85,22 +83,28 @@ def load(path: pathlib.Path) -> Info:
             return TargetType.EXECUTABLE
         return TargetType[type_or_none.upper()]
 
+    def get_libraries(info_libs: Optional[List[str]],
+                      target_libs: Optional[List[str]]) -> List[library.Library]:
+        lib_names = util.unique_list((info_libs or []) + (target_libs or []))
+        return [libraries[name] for name in lib_names]
+
     data = util.load_json(path, INFO_SCHEMA)
+
+    base_includes = paths_array(data.get('include_dirs'))
+    base_flags = data.get('flags', '') + ' '
+
     return Info(
         projectname=data['projectname'],
         builddir=pathlib.Path(data['builddir']),
-        flags=data.get('flags', ''),
-        libraries=data.get('libraries', []),
-        include_dirs=paths_array(data.get('include_dirs')),
         copy=data.get('copy', []),
         targets=[
             Target(
                 name=target['name'],
                 type=target_type(target.get('type')),
                 srcs=[pathlib.Path(path) for path in target['srcs']],
-                flags=target.get('flags', ''),
-                libraries=target.get('libraries', []),
-                include_dirs=paths_array(target.get('include_dirs')),
+                flags=(base_flags + target.get('flags', '')).strip(),
+                libraries=get_libraries(data.get('libraries'), target.get('libraries')),
+                include_dirs=base_includes + paths_array(target.get('include_dirs')),
                 install_to=paths_array(target.get('install_to')),
                 install_includes=paths_array(target.get('install_includes'))
             )

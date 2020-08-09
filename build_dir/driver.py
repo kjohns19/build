@@ -37,8 +37,8 @@ def main(argv: List[str]):
     if args.projectname:
         copy_template(args.buildfile, args.projectname, args.template)
 
-    data = read_info(args.buildfile, args.run_cmake, args.run_make)
     libraries = library.load_all(BUILDDATADIR / 'libs')
+    data = read_info(args.buildfile, libraries, args.run_cmake, args.run_make)
 
     is_git = is_git_repo()
     if not is_git and args.make_git:
@@ -49,7 +49,7 @@ def main(argv: List[str]):
     check_source_files(data)
 
     if data.need_init:
-        generate_cmake(data.info, libraries, pathlib.Path('CMakeLists.txt'))
+        generate_cmake(data.info, pathlib.Path('CMakeLists.txt'))
         if is_git:
             generate_gitignore(data.info)
         data.need_cmake = True
@@ -242,13 +242,14 @@ def run_make(builddir: pathlib.Path, sudo: bool, args: List[str]):
         run_command(command)
 
 
-def read_info(filename: pathlib.Path, run_cmake: bool, run_make: bool) -> BuildData:
+def read_info(filename: pathlib.Path, libraries: Dict[str, library.Library],
+              run_cmake: bool, run_make: bool) -> BuildData:
     if not filename.is_file():
         print(f'ERROR: build info file "{filename}" does not exist. '
               'Run "build --help" for help', file=sys.stderr)
         sys.exit(1)
 
-    info = buildinfo.load(filename)
+    info = buildinfo.load(filename, libraries)
 
     if info.builddir:
         cmakefile = pathlib.Path('CMakeLists.txt')
@@ -305,8 +306,7 @@ def check_source_files(data: BuildData):
         (srcdir / target.name).write_text('\n'.join(str(src) for src in srcs) + '\n')
 
 
-def generate_cmake(info: buildinfo.Info, libraries: Dict[str, library.Library],
-                   filename: pathlib.Path):
+def generate_cmake(info: buildinfo.Info, filename: pathlib.Path):
     cmake_data = [
         'cmake_minimum_required(VERSION 2.8 FATAL_ERROR)',
         '',
@@ -315,18 +315,12 @@ def generate_cmake(info: buildinfo.Info, libraries: Dict[str, library.Library],
 
     print('Generating CMakeLists.txt')
 
-    base_libraries = info.libraries
-    all_libraries = base_libraries.copy()
-    target_libraries = {}
-    for target in info.targets:
-        all_libraries += target.libraries
-        libs = base_libraries + target.libraries
-        target_libraries[target.name] = [libraries[lib] for lib in libs]
-    lib_data = [libraries[lib] for lib in util.unique_list(all_libraries)]
+    all_libraries = util.unique_list(
+        lib for target in info.targets for lib in target.libraries)
 
-    find_packs = [find for lib in lib_data for find in lib.find_package]
-    pkg_checks = [check for lib in lib_data for check in lib.pkg_check]
-    link_dirs = [dir for lib in lib_data for dir in lib.link_dirs]
+    find_packs = [find for lib in all_libraries for find in lib.find_package]
+    pkg_checks = [check for lib in all_libraries for check in lib.pkg_check]
+    link_dirs = [dir for lib in all_libraries for dir in lib.link_dirs]
 
     if find_packs:
         cmake_data.append('')
@@ -358,21 +352,18 @@ def generate_cmake(info: buildinfo.Info, libraries: Dict[str, library.Library],
                 f'add_library({target.name} STATIC ${{{files_var}}})'
         }
         cmake_data.append(type_dict[target.type])
-        flags = f'{info.flags} {target.flags}'.strip()
-        if flags:
-            options = f'{target.name} PRIVATE {flags}'
+        if target.flags:
+            options = f'{target.name} PRIVATE {target.flags}'
             cmake_data.append(f'target_compile_options({options})')
 
-        target_libs = target_libraries[target.name]
-
-        include_dirs = [dir for lib in target_libs for dir in lib.include_dirs]
-        include_dirs += info.include_dirs + target.include_dirs
+        include_dirs = [dir for lib in target.libraries for dir in lib.include_dirs]
+        include_dirs += target.include_dirs
         if include_dirs:
             dirs = ' '.join(str(include_dir) for include_dir in include_dirs)
             cmake_data.append(
                 f'target_include_directories({target.name} PRIVATE {dirs})')
 
-        link_libs = [link_lib for lib in target_libs for link_lib in lib.link_libs]
+        link_libs = [link_lib for lib in target.libraries for link_lib in lib.link_libs]
         if link_libs:
             links = ' '.join(link_libs)
             cmake_data.append(f'target_link_libraries({target.name} {links})')
