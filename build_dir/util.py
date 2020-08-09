@@ -1,9 +1,13 @@
 import jsonschema  # type: ignore
 import json
 import pathlib
-from typing import Any, Dict, Iterable, List, TypeVar
+from typing import Any, Callable, Dict, Iterable, List, TypeVar
 
 T = TypeVar('T')
+
+
+def identity(value: T) -> T:
+    return value
 
 
 def load_json(filename: pathlib.Path, schema: Dict[str, Any]) -> Dict[str, Any]:
@@ -13,9 +17,14 @@ def load_json(filename: pathlib.Path, schema: Dict[str, Any]) -> Dict[str, Any]:
     return data
 
 
-def unique_list(lst: Iterable[T]) -> List[T]:
-    seen = set()
-    return [
-        elem for elem in lst
-        if not (elem in seen or seen.add(elem))  # type: ignore
-    ]
+def unique_list(lst: Iterable[T], key: Callable[[T], Any] = identity) -> List[T]:
+    seen_set = set()
+
+    def seen(elem: T) -> bool:
+        value = key(elem)
+        if value in seen_set:
+            return True
+        seen_set.add(value)
+        return False
+
+    return [elem for elem in lst if not seen(elem)]

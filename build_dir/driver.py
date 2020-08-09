@@ -316,7 +316,8 @@ def generate_cmake(info: buildinfo.Info, filename: pathlib.Path):
     print('Generating CMakeLists.txt')
 
     all_libraries = util.unique_list(
-        lib for target in info.targets for lib in target.libraries)
+        (lib for target in info.targets for lib in target.libraries),
+        key=id)
 
     find_packs = [find for lib in all_libraries for find in lib.find_package]
     pkg_checks = [check for lib in all_libraries for check in lib.pkg_check]
