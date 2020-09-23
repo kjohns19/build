@@ -35,8 +35,8 @@ def main(argv: List[str]):
 
     init_logging()
 
-    if args.listtemplates:
-        print('Available templates: {", ".join(all_templates())}')
+    if args.list_templates:
+        print(f'Available templates: {", ".join(all_templates())}')
         return
     if args.projectname:
         copy_template(args.buildfile, args.projectname, args.template)
@@ -66,36 +66,42 @@ def main(argv: List[str]):
 
 
 def parse_args(argv: List[str]) -> argparse.Namespace:
-    desc = 'Easy to use wrapper script around cmake and make'
-    parser = argparse.ArgumentParser(description=desc)
+    parser = argparse.ArgumentParser(
+        description='Easy to use wrapper script around cmake and make')
+
     parser.add_argument(
-        '-f', '--buildfile', action='store', type=pathlib.Path,
+        '-f', '--buildfile', metavar='FILE', type=pathlib.Path,
         default=pathlib.Path('build.info'),
-        help='Use FILE as the build file')
+        help='use FILE as the build file')
+
     parser.add_argument(
-        '-i', '--init', action='store', dest='projectname',
-        help='Initialize a new project build. This generates a new build.info file.')
+        '-i', '--init', dest='projectname',
+        help='initialize a new project with the given name')
     parser.add_argument(
-        '-t', '--template', action='store', default='default',
-        help='With -i/--init, use a template for initialization')
+        '-t', '--template', default='default',
+        help='with -i/--init, use a template for initialization')
+
     parser.add_argument(
-        '-T', '--listtemplates', action='store_true',
-        help='List all available templates')
+        '-T', '--list-templates', action='store_true',
+        help='list all available templates and exit')
+
     parser.add_argument(
-        '-c', '--nocmake', dest='run_cmake', action='store_false',
-        help='Don\'t run cmake')
+        '-c', '--no-cmake', dest='run_cmake', action='store_false',
+        help='don\'t run cmake')
     parser.add_argument(
-        '-m', '--nomake', dest='run_make', action='store_false',
-        help='Don\'t run make')
+        '-m', '--no-make', dest='run_make', action='store_false',
+        help='don\'t run make')
     parser.add_argument(
-        '-g', '--nogit', dest='make_git', action='store_false',
-        help='Don\'t create a git repository (with -i/--init)')
+        '-g', '--no-git', dest='make_git', action='store_false',
+        help='don\'t create a git repository (with -i/--init)')
+
     parser.add_argument(
         '-s', '--sudo', action='store_true',
-        help='Run make with sudo')
+        help='run make with sudo')
+
     parser.add_argument(
-        'make_args', action='store', nargs='*',
-        help='Pass argument to make')
+        'make_args', nargs='*',
+        help='arguments to pass to make')
 
     return parser.parse_args(argv)
 
