@@ -32,37 +32,8 @@ class BuildData:
 
 def main(argv: List[str]):
     args = parse_args(argv)
-
     init_logging()
-
-    if args.list_templates:
-        print(f'Available templates: {", ".join(all_templates())}')
-        return
-    if args.projectname:
-        copy_template(args.buildfile, args.projectname, args.template)
-
-    libraries = library.load_all(BUILDDATADIR / 'libs')
-    data = read_info(args.buildfile, libraries, args.run_cmake, args.run_make)
-
-    is_git = is_git_repo()
-    if not is_git and args.make_git:
-        init_git()
-        is_git = True
-
-    data.info.builddir.mkdir(parents=True, exist_ok=True)
-    check_source_files(data)
-
-    if data.need_init:
-        generate_cmake(data.info, pathlib.Path('CMakeLists.txt'))
-        if is_git:
-            generate_gitignore(data.info)
-        data.need_cmake = True
-
-    if data.need_cmake and data.run_cmake:
-        run_cmake(data.info.builddir)
-
-    if data.run_make:
-        run_make(data.info.builddir, args.sudo, args.make_args)
+    args.handler(args)
 
 
 def parse_args(argv: List[str]) -> argparse.Namespace:
@@ -103,13 +74,57 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         'make_args', nargs='*',
         help='arguments to pass to make')
 
-    return parser.parse_args(argv)
+    parser.set_defaults(handler=handle_run_build)
+
+    args = parser.parse_args(argv)
+
+    if args.list_templates:
+        args.handler = handle_list_templates
+    elif args.projectname:
+        args.handler = handle_init
+
+    return args
 
 
 def init_logging():
     logging.basicConfig(
         level=logging.INFO,
         format='%(levelname)s: %(message)s')
+
+
+def handle_list_templates(args: argparse.Namespace):
+    templates = all_templates()
+    print('Available templates:', ' '.join(templates))
+
+
+def handle_init(args: argparse.Namespace):
+    copy_template(args.buildfile, args.projectname, args.template)
+    handle_run_build(args)
+
+
+def handle_run_build(args: argparse.Namespace):
+    libraries = library.load_all(BUILDDATADIR / 'libs')
+    data = read_info(args.buildfile, libraries, args.run_cmake, args.run_make)
+
+    is_git = is_git_repo()
+    if not is_git and args.make_git:
+        init_git()
+        is_git = True
+
+    data.info.builddir.mkdir(parents=True, exist_ok=True)
+    check_source_files(data)
+
+    if data.need_init:
+        generate_cmake(data.info, pathlib.Path('CMakeLists.txt'))
+        if is_git:
+            generate_gitignore(data.info)
+        data.need_cmake = True
+
+    if data.need_cmake and data.run_cmake:
+        run_cmake(data.info.builddir)
+
+    if data.run_make:
+        run_make(data.info.builddir, args.sudo, args.make_args)
 
 
 def is_git_repo() -> bool:
