@@ -387,8 +387,8 @@ def generate_cmake(info: buildinfo.Info, filename: pathlib.Path):
             options = f'{target.name} PRIVATE {target.flags}'
             cmake_data.append(f'target_compile_options({options})')
 
-        include_dirs = [dir for lib in target.libraries for dir in lib.include_dirs]
-        include_dirs += target.include_dirs
+        include_dirs = target.include_dirs
+        include_dirs += [dir for lib in target.libraries for dir in lib.include_dirs]
         if include_dirs:
             dirs = ' '.join(str(include_dir) for include_dir in include_dirs)
             cmake_data.append(
