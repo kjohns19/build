@@ -1,0 +1,7 @@
+{
+    "python3.8": {
+        "include_dirs": "/usr/bin/python3.8-config --includes | tr ' ' '\n' | grep '^-I' | cut -c3-",
+        "link_dirs":    "/usr/bin/python3.8-config --ldflags | tr ' ' '\n' | grep '^-L' | cut -c3-",
+        "link_libs":    "echo -lpython3.8 $(/usr/bin/python3.8-config --ldflags) | tr ' ' '\n' | grep '^-l' | cut -c3-"
+    }
+}
