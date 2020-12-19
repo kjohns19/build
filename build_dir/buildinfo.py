@@ -83,12 +83,26 @@ def load(path: pathlib.Path, libraries: Dict[str, library.Library]) -> Info:
             return TargetType.EXECUTABLE
         return TargetType[type_or_none.upper()]
 
+    all_libraries = libraries.copy()
+
     def get_libraries(info_libs: Optional[List[str]],
                       target_libs: Optional[List[str]]) -> List[library.Library]:
         lib_names = util.unique_list((info_libs or []) + (target_libs or []))
-        return [libraries[name] for name in lib_names]
+        return [all_libraries[name] for name in lib_names]
 
     data = util.load_json(path, INFO_SCHEMA)
+
+    # Add local libraries to the list of libraries
+    for target in data['targets']:
+        type = target_type(target.get('type'))
+        if type in (TargetType.SHAREDLIB, TargetType.STATICLIB):
+            all_libraries[target['name']] = library.Library(
+                name=target['name'],
+                link_libs=[target['name']],
+                find_package=[],
+                pkg_check=[],
+                include_dirs=[],
+                link_dirs=[])
 
     base_includes = paths_array(data.get('include_dirs'))
     base_flags = data.get('flags', '') + ' '
