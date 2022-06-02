@@ -5,7 +5,7 @@ PYTHON="python3.10"
 # Fail if anything fails
 set -e
 
-script_dir=$(dirname "$0")
+script_dir=$(dirname "$(readlink -f "$0")")
 venv_dir="$script_dir/env"
 
 #Activate virtual environment
