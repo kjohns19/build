@@ -42,23 +42,31 @@ def main() -> int:
 def parse_args() -> tuple[Args, list[str]]:
     parser = argparse.ArgumentParser(prog='build')
     parser.add_argument(
-        '--sudo', action='store_true',
-        help='run make using sudo')
+        '--sudo',
+        action='store_true',
+        help='run make using sudo',
+    )
     parser.add_argument(
-        '--exec-dir', type=pathlib.Path,
-        help='directory to put executables')
+        '--exec-dir',
+        type=pathlib.Path,
+        help='directory to put executables',
+    )
     parser.add_argument(
-        'action', nargs='?', choices=[a.value for a in Action],
+        'action',
+        nargs='?',
+        choices=[a.value for a in Action],
         default=Action.MAKE.value,
-        help='action to run')
+        help='action to run',
+    )
     args, remaining = parser.parse_known_args()
     if args.exec_dir is not None:
         args.exec_dir = args.exec_dir.absolute()
     return Args(args.sudo, args.exec_dir, Action(args.action)), remaining
 
 
-def action_make(current_dir: pathlib.Path, build_dir: pathlib.Path, args: Args,
-                argv: list[str]) -> int:
+def action_make(
+    current_dir: pathlib.Path, build_dir: pathlib.Path, args: Args, argv: list[str]
+) -> int:
     build_dir.mkdir(exist_ok=True)
     rc = run_cmake(current_dir, build_dir, args.exec_dir)
     if rc:
@@ -68,15 +76,17 @@ def action_make(current_dir: pathlib.Path, build_dir: pathlib.Path, args: Args,
     return rc
 
 
-def action_ctest(current_dir: pathlib.Path, build_dir: pathlib.Path, args: Args,
-                 argv: list[str]) -> int:
+def action_ctest(
+    current_dir: pathlib.Path, build_dir: pathlib.Path, args: Args, argv: list[str]
+) -> int:
     logging.info('Running ctest')
     proc = subprocess.run(['ctest'] + argv, cwd=build_dir)
     return proc.returncode
 
 
-def run_cmake(current_dir: pathlib.Path, build_dir: pathlib.Path,
-              exec_dir: pathlib.Path | None) -> int:
+def run_cmake(
+    current_dir: pathlib.Path, build_dir: pathlib.Path, exec_dir: pathlib.Path | None
+) -> int:
     logging.info('Running cmake')
     cmd = ['cmake']
     if exec_dir is not None:
