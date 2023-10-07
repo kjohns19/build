@@ -10,17 +10,11 @@ venv_dir="$script_dir/venv"
 
 #Activate virtual environment
 if [[ -z "$VIRTUAL_ENV" ]]; then
-    if ! [[ -d "$venv_dir" ]]; then
-        echo "Initializing virtual env in $venv_dir"
-        "$PYTHON" -m venv "$venv_dir"
-        source "$venv_dir/bin/activate"
-        trap deactivate EXIT
-        echo "Loading requirements"
-        pip install -r "$script_dir/requirements.txt"
-    else
-        source "$venv_dir/bin/activate"
-        trap deactivate EXIT
-    fi
+    (
+        cd $script_dir
+        make check-venv
+    )
+    . "$venv_dir/bin/activate"
 fi
 
 # Run
