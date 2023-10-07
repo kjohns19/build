@@ -40,7 +40,7 @@ def main() -> int:
 
 
 def parse_args() -> tuple[Args, list[str]]:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog='build')
     parser.add_argument(
         '--sudo', action='store_true',
         help='run make using sudo')
