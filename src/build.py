@@ -1,3 +1,5 @@
+'''A simple wrapper around cmake, ctest, and make'''
+
 import argparse
 import dataclasses
 import enum
@@ -40,7 +42,11 @@ def main() -> int:
 
 
 def parse_args() -> tuple[Args, list[str]]:
-    parser = argparse.ArgumentParser(prog='build')
+    parser = argparse.ArgumentParser(
+        prog='build',
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         '--sudo',
         action='store_true',
@@ -56,7 +62,7 @@ def parse_args() -> tuple[Args, list[str]]:
         nargs='?',
         choices=[a.value for a in Action],
         default=Action.MAKE.value,
-        help='action to run',
+        help='action to run, by default "make"',
     )
     args, remaining = parser.parse_known_args()
     if args.exec_dir is not None:
@@ -80,7 +86,7 @@ def action_ctest(
     current_dir: pathlib.Path, build_dir: pathlib.Path, args: Args, argv: list[str]
 ) -> int:
     logging.info('Running ctest')
-    proc = subprocess.run(['ctest'] + argv, cwd=build_dir)
+    proc = subprocess.run(['ctest'] + argv, cwd=build_dir, check=False)
     return proc.returncode
 
 
@@ -92,7 +98,7 @@ def run_cmake(
     if exec_dir is not None:
         cmd.append(f'-DCMAKE_RUNTIME_OUTPUT_DIRECTORY={exec_dir}')
     cmd.append(str(current_dir))
-    proc = subprocess.run(cmd, cwd=build_dir)
+    proc = subprocess.run(cmd, cwd=build_dir, check=False)
     return proc.returncode
 
 
@@ -101,7 +107,7 @@ def run_make(build_dir: pathlib.Path, sudo: bool, argv: list[str]) -> int:
     cmd = ['make'] + argv
     if sudo:
         cmd = ['sudo'] + cmd
-    proc = subprocess.run(cmd, cwd=build_dir)
+    proc = subprocess.run(cmd, cwd=build_dir, check=False)
     return proc.returncode
 
 

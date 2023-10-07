@@ -6,3 +6,10 @@ skip-string-normalization = true
 [tool.mypy]
 python_version = "3.10"
 strict = true
+
+[tool.pylint]
+disable = [
+    'missing-class-docstring',
+    'missing-function-docstring',
+    'unused-argument',
+]
