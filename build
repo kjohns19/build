@@ -6,7 +6,7 @@ PYTHON="python3.10"
 set -e
 
 script_dir=$(dirname "$(readlink -f "$0")")
-venv_dir="$script_dir/env"
+venv_dir="$script_dir/venv"
 
 #Activate virtual environment
 if [[ -z "$VIRTUAL_ENV" ]]; then
