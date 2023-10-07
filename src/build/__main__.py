@@ -1,10 +1,19 @@
+import argparse
+import dataclasses
 import logging
 import pathlib
 import subprocess
 import sys
 
 
+@dataclasses.dataclass
+class Args:
+    sudo: bool
+
+
 def main() -> int:
+    args, argv = parse_args()
+
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
     current_dir = pathlib.Path.cwd()
@@ -18,8 +27,18 @@ def main() -> int:
     rc = run_cmake(build_dir=build_dir, output_dir=current_dir)
     if rc:
         return rc
-    rc = run_make(build_dir, sys.argv[1:])
+
+    rc = run_make(build_dir, args.sudo, argv)
     return rc
+
+
+def parse_args() -> tuple[Args, list[str]]:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--sudo', action='store_true',
+        help='run make using sudo')
+    args, remaining = parser.parse_known_args()
+    return Args(args.sudo), remaining
 
 
 def run_cmake(build_dir: pathlib.Path, output_dir: pathlib.Path) -> int:
@@ -30,9 +49,12 @@ def run_cmake(build_dir: pathlib.Path, output_dir: pathlib.Path) -> int:
     proc.returncode
 
 
-def run_make(build_dir: pathlib.Path, argv: list[str]) -> int:
+def run_make(build_dir: pathlib.Path, sudo: bool, argv: list[str]) -> int:
     logging.info('Running make')
-    proc = subprocess.run(['make'] + argv, cwd=build_dir)
+    cmd = ['make'] + argv
+    if sudo:
+        cmd = ['sudo'] + cmd
+    proc = subprocess.run(cmd, cwd=build_dir)
     proc.returncode
 
 
