@@ -15,6 +15,7 @@ class Action(enum.Enum):
 @dataclasses.dataclass
 class Args:
     sudo: bool
+    exec_dir: pathlib.Path | None
     action: Action
 
 
@@ -44,17 +45,22 @@ def parse_args() -> tuple[Args, list[str]]:
         '--sudo', action='store_true',
         help='run make using sudo')
     parser.add_argument(
+        '--exec-dir', type=pathlib.Path,
+        help='directory to put executables')
+    parser.add_argument(
         'action', nargs='?', choices=[a.value for a in Action],
         default=Action.MAKE.value,
         help='action to run')
     args, remaining = parser.parse_known_args()
-    return Args(args.sudo, Action(args.action)), remaining
+    if args.exec_dir is not None:
+        args.exec_dir = args.exec_dir.absolute()
+    return Args(args.sudo, args.exec_dir, Action(args.action)), remaining
 
 
 def action_make(current_dir: pathlib.Path, build_dir: pathlib.Path, args: Args,
                 argv: list[str]) -> int:
     build_dir.mkdir(exist_ok=True)
-    rc = run_cmake(build_dir=build_dir, output_dir=current_dir)
+    rc = run_cmake(current_dir, build_dir, args.exec_dir)
     if rc:
         return rc
 
@@ -69,11 +75,14 @@ def action_ctest(current_dir: pathlib.Path, build_dir: pathlib.Path, args: Args,
     return proc.returncode
 
 
-def run_cmake(build_dir: pathlib.Path, output_dir: pathlib.Path) -> int:
+def run_cmake(current_dir: pathlib.Path, build_dir: pathlib.Path,
+              exec_dir: pathlib.Path | None) -> int:
     logging.info('Running cmake')
-    proc = subprocess.run(
-        ['cmake', f'-DCMAKE_RUNTIME_OUTPUT_DIRECTORY={output_dir}', '..'],
-        cwd=build_dir)
+    cmd = ['cmake']
+    if exec_dir is not None:
+        cmd.append(f'-DCMAKE_RUNTIME_OUTPUT_DIRECTORY={exec_dir}')
+    cmd.append(str(current_dir))
+    proc = subprocess.run(cmd, cwd=build_dir)
     return proc.returncode
 
 
